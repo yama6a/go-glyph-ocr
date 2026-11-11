@@ -17,7 +17,7 @@ const (
 // With the same seed and the same samples in the same order, it gives the same glyphs as php-glyph-ocr.
 type Trainer struct {
 	lineCount int
-	rnd       uint32Source
+	rnd       func() uint32
 }
 
 // NewTrainer returns a trainer that makes lineCount line segments of each kind per glyph, from 1 to 255.
@@ -27,11 +27,12 @@ func NewTrainer(lineCount int, seed uint32) (*Trainer, error) {
 		return nil, fmt.Errorf("%w: a trainer needs 1 to %d lines, got %d", ErrInvalidOption, maxTrainLine, lineCount)
 	}
 
-	return &Trainer{lineCount: lineCount, rnd: newMT19937(seed)}, nil
+	return &Trainer{lineCount: lineCount, rnd: newMT19937(seed).next}, nil
 }
 
 // Train returns the glyph that describes s as the character text.
 // Each call continues the random sequence of the trainer.
+// A Trainer is not safe for concurrent use.
 func (t *Trainer) Train(s *Sample, text string, italic bool) (*Glyph, error) {
 	if text == "" {
 		return nil, fmt.Errorf("%w: cannot train a glyph without text", ErrInvalidGlyph)
@@ -55,7 +56,7 @@ func (t *Trainer) Train(s *Sample, text string, italic bool) (*Glyph, error) {
 		expand = s.Parts
 	}
 
-	return &Glyph{
+	g := &Glyph{
 		Text:        text,
 		Width:       s.Width,
 		Height:      s.Height,
@@ -64,7 +65,12 @@ func (t *Trainer) Train(s *Sample, text string, italic bool) (*Glyph, error) {
 		ExpandCount: expand,
 		Foreground:  foreground,
 		Background:  background,
-	}, nil
+	}
+	if err := g.Validate(); err != nil {
+		return nil, err
+	}
+
+	return g, nil
 }
 
 func (t *Trainer) randomPoint(w, h int) point {
@@ -117,12 +123,12 @@ func (t *Trainer) generate(s *Sample, maxLines int, fg bool) []Segment {
 				}
 			}
 		case hits < pick(fg, 20, 10) && count < pick(fg, 2000, 1000):
-			end = t.redrawEnd(start, end, w, h, func(d int) bool { return d > h/2 })
+			end = t.redrawEnd(start, end, w, h, h/2, true)
 		case hits < 30 && count < pick(fg, 3000, 2000):
-			end = t.redrawEnd(start, end, w, h, func(d int) bool { return d < 15 })
+			end = t.redrawEnd(start, end, w, h, 15, false)
 		default:
 			minLength := pick(fg, 15, 5)
-			end = t.redrawEnd(start, end, w, h, func(d int) bool { return d < minLength })
+			end = t.redrawEnd(start, end, w, h, minLength, false)
 		}
 
 		seg := Segment{start.x, start.y, end.x, end.y}
@@ -140,10 +146,12 @@ func (t *Trainer) generate(s *Sample, maxLines int, fg bool) []Segment {
 	return removeSimilar(removeContained(lines), w, h)
 }
 
-// redrawEnd draws new ends, up to 500 times, until done accepts the Manhattan distance of start and end.
-func (t *Trainer) redrawEnd(start, end point, w, h int, done func(distance int) bool) point {
+// redrawEnd draws new ends, up to 500 times, until the Manhattan distance of start and end is above limit
+// (when above is true) or below limit (when above is false).
+func (t *Trainer) redrawEnd(start, end point, w, h, limit int, above bool) point {
 	for range 500 {
-		if done(abs(start.x-end.x) + abs(start.y-end.y)) {
+		d := abs(start.x-end.x) + abs(start.y-end.y)
+		if (above && d > limit) || (!above && d < limit) {
 			break
 		}
 		end = t.randomPoint(w, h)
@@ -173,7 +181,7 @@ func containsSegment(lines []Segment, seg Segment) bool {
 // isMatch reports whether every point of seg is on ink (fg) or on background. With strict, the 4 neighbours of
 // each point must agree too, on samples wider or taller than 10 pixels.
 //
-//nolint:cyclop // port of NOcrChar.IsMatchPointForeGround, the parity tests depend on its branch order
+//nolint:cyclop // port of NOcrChar.IsMatchPointForeGround and IsMatchPointBackGround, the parity tests depend on its branch order
 func isMatch(s *Sample, seg Segment, strict, fg bool) bool {
 	w, h := s.Width, s.Height
 	if fg && abs(seg.X1-seg.X2) < 2 && abs(seg.Y2-seg.Y1) < 2 {
@@ -205,7 +213,7 @@ func isMatch(s *Sample, seg Segment, strict, fg bool) bool {
 // removeContained drops a vertical segment inside another vertical segment on the same column,
 // and a horizontal segment inside another horizontal segment on the same row.
 //
-//nolint:cyclop // port of the contained-line removal of NOcrChar.GenerateLines, the parity tests depend on its branch order
+//nolint:cyclop // port of NOcrChar.RemoveDuplicates, the parity tests depend on its branch order
 func removeContained(lines []Segment) []Segment {
 	drop := make([]bool, len(lines))
 	for i, outer := range lines {

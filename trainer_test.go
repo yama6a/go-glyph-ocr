@@ -2,6 +2,7 @@ package glyphocr
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -98,6 +99,14 @@ func TestTrainerTrain(t *testing.T) {
 		require.ErrorIs(t, err, ErrInvalidGlyph)
 		_, err = tr.Train(&Sample{Width: 2, Height: 2, Parts: 1}, "x", false)
 		require.ErrorIs(t, err, ErrInvalidSample)
+		_, err = tr.Train(ringSample(), strings.Repeat("x", 256), false)
+		require.ErrorIs(t, err, ErrInvalidGlyph)
+		_, err = tr.Train(ringSample(), "a\x00b", false)
+		require.ErrorIs(t, err, ErrInvalidGlyph)
+		negative := ringSample()
+		negative.MarginTop = -1
+		_, err = tr.Train(negative, "x", false)
+		require.ErrorIs(t, err, ErrInvalidGlyph)
 	})
 }
 

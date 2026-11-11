@@ -1,19 +1,11 @@
 package glyphocr
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-type fakeSource struct{ values []uint32 }
-
-func (f *fakeSource) next() uint32 {
-	v := f.values[0]
-	f.values = f.values[1:]
-
-	return v
-}
 
 func TestMT19937(t *testing.T) {
 	t.Parallel()
@@ -42,7 +34,7 @@ func TestGetInt(t *testing.T) {
 	}{
 		{"single value draws once", []uint32{123, 456}, 0, 0, 0, 1},
 		{"power of 2 masks", []uint32{0xFFFFFFF7, 456}, 3, 10, 3 + 7, 1},
-		{"full range", []uint32{0xFFFFFFFF}, 0, 0xFFFFFFFF, 0xFFFFFFFF, 0},
+		{"full range", []uint32{5}, math.MinInt32, math.MaxInt32, math.MinInt32 + 5, 0},
 		{"modulo", []uint32{17}, 5, 11, 5 + 3, 0},
 		{"draw above limit is rejected", []uint32{0xFFFFFFFF, 7}, 0, 9, 7, 0},
 	}
@@ -50,9 +42,15 @@ func TestGetInt(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			src := &fakeSource{values: tt.values}
-			assert.Equal(t, tt.want, getInt(src, tt.lo, tt.hi))
-			assert.Len(t, src.values, tt.left)
+			values := tt.values
+			next := func() uint32 {
+				v := values[0]
+				values = values[1:]
+
+				return v
+			}
+			assert.Equal(t, tt.want, getInt(next, tt.lo, tt.hi))
+			assert.Len(t, values, tt.left)
 		})
 	}
 }

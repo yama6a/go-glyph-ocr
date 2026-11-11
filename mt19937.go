@@ -11,11 +11,6 @@ const (
 	mtLowerMask = 0x7fffffff
 )
 
-// uint32Source gives uniform 32-bit values.
-type uint32Source interface {
-	next() uint32
-}
-
 // mt19937 is the standard 32-bit Mersenne Twister, the generator behind PHP mt_rand.
 type mt19937 struct {
 	state [mtSize]uint32
@@ -60,9 +55,9 @@ func (m *mt19937) twist() {
 }
 
 // getInt returns a uniform integer from lo to hi, both included, as PHP Randomizer::getInt does.
-// It always draws at least one value, also when lo equals hi.
-func getInt(src uint32Source, lo, hi int) int {
-	r := src.next()
+// It calls next for each draw and always draws at least one value, also when lo equals hi.
+func getInt(next func() uint32, lo, hi int) int {
+	r := next()
 	umax := uint32(hi - lo)
 	if umax == 0xFFFFFFFF {
 		return lo + int(r)
@@ -73,7 +68,7 @@ func getInt(src uint32Source, lo, hi int) int {
 	}
 	limit := 0xFFFFFFFF - (0xFFFFFFFF % umax) - 1
 	for r > limit {
-		r = src.next()
+		r = next()
 	}
 
 	return lo + int(r%umax)
