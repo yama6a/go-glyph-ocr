@@ -31,7 +31,6 @@ func isSingle(c Char) bool {
 	return c.Sample != nil && c.Sample.Parts <= 1
 }
 
-// isOneOf reports whether text is exactly one letter of list.
 func isOneOf(text, list string) bool {
 	r, size := utf8.DecodeRuneInString(text)
 	return size > 0 && size == len(text) && strings.ContainsRune(list, r)
@@ -173,7 +172,7 @@ func (f *capitalIFixer) fixLine(chars []Char) {
 			continue
 		}
 		top := c.Sample.MarginTop
-		text := tops.decide(top)
+		text := tops.byLineTops(top)
 		if text == "" {
 			text = byBarTops(top, barTops)
 		}
@@ -230,7 +229,6 @@ func lineBarTops(chars []Char) []int {
 	return barTops
 }
 
-// topmost returns the smaller of a known top and a new top.
 func topmost(known, top int, hasKnown bool) int {
 	if hasKnown {
 		return min(known, top)
@@ -240,7 +238,7 @@ func topmost(known, top int, hasKnown bool) int {
 
 // The by* rules return "" when they cannot decide.
 
-func (t lineTops) decide(top int) string {
+func (t lineTops) byLineTops(top int) string {
 	switch {
 	case t.hasCapital && t.hasAscender:
 		if t.capital-t.ascender < 1 {
@@ -317,12 +315,11 @@ func byNeighbours(chars []Char, i int) string {
 	return ""
 }
 
-// isRune reports whether text is exactly one code point and is holds for it.
 func isRune(text string, is func(rune) bool) bool {
 	r, size := utf8.DecodeRuneInString(text)
 	return size > 0 && size == len(text) && is(r)
 }
 
 func isLetterOrApostrophe(r rune) bool {
-	return unicode.IsLetter(r) || r == '\'' || r == '’'
+	return unicode.IsLetter(r) || r == '\'' || r == '\u2019'
 }

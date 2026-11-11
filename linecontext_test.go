@@ -61,6 +61,7 @@ func TestLineContextFixers(t *testing.T) {
 		},
 		{"line case", fixLineCase, []string{"D:0:30 O:9:22 _ n:9:21 O:9:22 t:3:28 _ G:0:31 o:0:31"}, []string{"Do not GO"}},
 		{"line case, zero", fixLineCase, []string{"n:9:21 0:9:22 _ 1:0:30 0:0:31"}, []string{"no 10"}},
+		{"line case, keeps case", fixLineCase, []string{"H:0:30 n:9:21 O:0:30 c:9:20"}, []string{"HnOc"}},
 		{"line case, no reference", fixLineCase, []string{"O:9:22 o:0:31"}, []string{"Oo"}},
 		{"marks", fixMarks, []string{"B:2:30 i:0:32 ':0:32 ':0:32 ':28:8 _ i:0:32 t:3:29 ,:0:10 s:9:23"}, []string{"Bill, it's"}},
 	}
