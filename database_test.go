@@ -173,7 +173,12 @@ func TestWriteRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 
 	raw := decompressed(t, d)
-	assert.Equal(t, byte(0), raw[2]&flagShort, "long form record first")
+	longRecord := []byte{
+		0x00, 0x00, 0x01, 0x2c, 0x00, 0x14, 0x00, 0x00, 0x01, 'W',
+		0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x2b, 0x00, 0x13,
+		0x00, 0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02,
+	}
+	assert.Equal(t, append([]byte("V2"), longRecord...), raw[:2+len(longRecord)])
 	got, err := ReadDatabase(bytes.NewReader(gz(t, raw)))
 	require.NoError(t, err)
 	assert.Equal(t, d.Glyphs(), got.Glyphs())

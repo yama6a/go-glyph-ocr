@@ -95,7 +95,7 @@ func (d *Database) Save(path string) error {
 	return err
 }
 
-// Add puts g first in the database. It returns an error that wraps ErrInvalidGlyph when g is invalid.
+// Add puts g first in its list, the multi-part list when g.ExpandCount is above 0, else the single-part list. It returns an error that wraps ErrInvalidGlyph when g is invalid.
 func (d *Database) Add(g *Glyph) error {
 	if err := g.Validate(); err != nil {
 		return err
@@ -126,11 +126,7 @@ func without(list []*Glyph, g *Glyph) ([]*Glyph, bool) {
 	if i < 0 {
 		return list, false
 	}
-	// A new slice, so a caller that holds an older Glyphs result keeps its view.
-	out := make([]*Glyph, 0, len(list)-1)
-	out = append(out, list[:i]...)
-
-	return append(out, list[i+1:]...), true
+	return slices.Delete(list, i, i+1), true
 }
 
 // Glyphs returns the glyphs of the database in the order the matcher tries them.
