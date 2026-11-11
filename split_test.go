@@ -36,6 +36,10 @@ func TestSplitToLetters(t *testing.T) {
 		}
 		return strings.Repeat(".", 16)
 	})
+	slanted := repeatRows(20, func(y int) string {
+		shift := 4 - y/5
+		return strings.Repeat(".", shift+1) + "###.###" + strings.Repeat(".", 5-shift)
+	})
 	tests := []struct {
 		name        string
 		rows        []string
@@ -59,6 +63,7 @@ func TestSplitToLetters(t *testing.T) {
 			"2 lines", twoLines, 3, false,
 			"2,2 4x14 top 2 | \" \" | 10,2 4x14 top 2 | \"\\n\" | 2,24 4x14 top 0 | \" \" | 10,24 4x14 top 0",
 		},
+		{"slanted strokes", slanted, 12, false, "2,0 6x20 top 0 | 6,0 6x20 top 0"},
 		{
 			"right to left",
 			[]string{".#..#.", ".#..#.", ".#..#.", ".#..#.", ".#..#."},
@@ -72,24 +77,6 @@ func TestSplitToLetters(t *testing.T) {
 			bmp := bitmapOf(len(tt.rows[0]), tt.rows...)
 			assert.Equal(t, tt.want, describeItems(splitToLetters(bmp, tt.spacePixels, tt.rightToLeft, 12, -1)))
 		})
-	}
-}
-
-func TestSplitToLettersSeparatesSlantedGlyphs(t *testing.T) {
-	t.Parallel()
-	rows := repeatRows(20, func(y int) string {
-		shift := 4 - y/5
-		return strings.Repeat(".", shift+1) + "###.###" + strings.Repeat(".", 5-shift)
-	})
-	items := splitToLetters(bitmapOf(13, rows...), 12, false, 12, -1)
-	if assert.Len(t, items, 2) {
-		for _, it := range items {
-			ink := 0
-			for _, p := range it.bmp.pixels {
-				ink += int(p)
-			}
-			assert.Equal(t, 60, ink)
-		}
 	}
 }
 

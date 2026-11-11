@@ -2,10 +2,12 @@
 
 package glyphocr
 
+import "slices"
+
 // splitToLetters returns the glyphs of all lines in reading order, with a space marker between words and a
 // line break marker between lines.
 //
-//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitToLetters, the parity tests depend on its branch order
+//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitBitmapToLettersNew, the parity tests depend on its branch order
 func splitToLetters(bmp *bitmap, spacePixels int, rightToLeft bool, minLineHeight int, averageLineHeight float64) []splitItem {
 	old := splitToLines(bmp, minLineHeight, averageLineHeight)
 
@@ -20,8 +22,7 @@ func splitToLetters(bmp *bitmap, spacePixels int, rightToLeft bool, minLineHeigh
 		lines = old
 	}
 
-	// Subtitle Edit gates this on the ink height, not the bitmap height. VobSub images carry empty rows under
-	// the text, and one line plus that margin would otherwise go through the up and down splitter.
+	// The gate uses the ink height, as Subtitle Edit does. VobSub images carry empty rows under the text.
 	if len(lines) == 1 && lines[0].bmp != nil && float64(lines[0].bmp.inkHeight()) > float64(minLineHeight)*2.2 {
 		lines = splitToLinesNew(lines[0], minLineHeight)
 	}
@@ -33,9 +34,7 @@ func splitToLetters(bmp *bitmap, spacePixels int, rightToLeft bool, minLineHeigh
 		}
 		items := splitHorizontal(line, spacePixels)
 		if rightToLeft {
-			for l, r := 0, len(items)-1; l < r; l, r = l+1, r-1 {
-				items[l], items[r] = items[r], items[l]
-			}
+			slices.Reverse(items)
 		}
 		for _, it := range items {
 			if i > 0 {
@@ -51,10 +50,6 @@ func splitToLetters(bmp *bitmap, spacePixels int, rightToLeft bool, minLineHeigh
 
 func linePart(bmp *bitmap, startY, size int) splitItem {
 	return splitItem{y: startY, bmp: bmp.copyRectangle(0, startY, bmp.width, size+1)}
-}
-
-func (b *bitmap) clone() *bitmap {
-	return &bitmap{width: b.width, height: b.height, pixels: append([]byte(nil), b.pixels...)}
 }
 
 func splitToLinesEmptyOrBlack(bmp *bitmap) []splitItem {
@@ -176,7 +171,7 @@ func rowsTouch(bmp *bitmap, rightRow, leftRow int) bool {
 	return left >= right
 }
 
-//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitToLinesByEmptyRows, the parity tests depend on its branch order
+//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitToLinesByMinTransparentHorizontalLines, the parity tests depend on its branch order
 func splitToLinesByEmptyRows(bmp *bitmap, minLineHeight, minEmptyRows int) []splitItem {
 	var parts []splitItem
 	startY, lastEmptyY, emptyInSequence := 0, -1, 0
@@ -225,7 +220,7 @@ type walkedLine struct {
 // splitToLinesNew splits lines whose glyphs reach into each other's rows, by walking a path that may step
 // up and down.
 //
-//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitLineNew, the parity tests depend on its branch order
+//nolint:cyclop // port of NikseBitmapImageSplitter2.SplitToLinesNew, the parity tests depend on its branch order
 func splitToLinesNew(item splitItem, minLineHeight int) []splitItem {
 	bmp := item.bmp.clone()
 	var parts []splitItem
@@ -242,7 +237,9 @@ func splitToLinesNew(item splitItem, minLineHeight int) []splitItem {
 			startY++
 			continue
 		}
-		points, completed := walkPath(bmp, y, minLineHeight, maxUp, &started)
+		var points []point
+		var completed bool
+		points, completed, started = walkPath(bmp, y, minLineHeight, maxUp, started)
 		if completed {
 			walked = append(walked, walkedLine{y, points})
 		}
@@ -290,10 +287,10 @@ func splitToLinesNew(item splitItem, minLineHeight int) []splitItem {
 }
 
 // walkPath walks from x 0 to the right edge along row y, stepping up and down around ink.
-// It reports whether the walk reached the last column.
+// It returns the points, whether the walk reached the last column, and the updated started flag.
 //
-//nolint:cyclop,gocognit,gocyclo // port of NikseBitmapImageSplitter2.SplitLineNew, the parity tests depend on its branch order
-func walkPath(bmp *bitmap, y, minLineHeight, maxUp int, started *bool) ([]point, bool) {
+//nolint:cyclop,gocognit,gocyclo // port of NikseBitmapImageSplitter2.SplitToLinesNew, the parity tests depend on its branch order
+func walkPath(bmp *bitmap, y, minLineHeight, maxUp int, started bool) ([]point, bool, bool) {
 	var points []point
 	yChange, backJump, x := 0, 0, 0
 	completed := false
@@ -302,7 +299,7 @@ func walkPath(bmp *bitmap, y, minLineHeight, maxUp int, started *bool) ([]point,
 	for x < width {
 		cy := y + yChange
 		if cy < 0 || cy >= height {
-			*started = true
+			started = true
 			break
 		}
 		var below byte
@@ -344,17 +341,17 @@ func walkPath(bmp *bitmap, y, minLineHeight, maxUp int, started *bool) ([]point,
 				blocked = true
 			}
 			if blocked {
-				*started = true
+				started = true
 				break
 			}
 		}
-		if *started {
+		if started {
 			points = append(points, point{x, cy})
 		}
 		completed = x == width-1
 		x++
 	}
-	return points, completed
+	return points, completed, started
 }
 
 func findBackJump(bmp *bitmap, x, cy, minLineHeight, maxUp int) (up, back int, found bool) {
@@ -413,8 +410,8 @@ func canGoUpAndRight(bmp *bitmap, up, right, x, y, minLineHeight int) bool {
 	return true
 }
 
-// splitHorizontal cuts one line into glyphs along vertical paths of empty pixels. A path may step left
-// or right around a pixel, so italic glyphs that share columns still come apart.
+// splitHorizontal cuts one line into glyphs along vertical paths of empty pixels.
+// A path may step left or right around a pixel, so italic glyphs that share columns still come apart.
 //
 //nolint:cyclop,gocognit // port of NikseBitmapImageSplitter2.SplitHorizontalNew, the parity tests depend on its branch order
 func splitHorizontal(line splitItem, spaceMinPixels int) []splitItem {
@@ -491,10 +488,11 @@ func maxX(points []point, x int) int {
 }
 
 // emptyVerticalPath returns the path of empty pixels from the top row to the bottom row that starts at
-// column x, or nil when ink blocks it. A path with no empty pixel is empty but not nil. The flags left and
-// right are never reset inside the walk, so after the first step to a side, every later ink step counts it again.
+// column x, or nil when ink blocks it. A path with no empty pixel is empty but not nil.
+// The flags left and right are never reset in the walk. After the first step to a side, every later ink step
+// counts that side again.
 //
-//nolint:cyclop // port of NikseBitmapImageSplitter2.GetEmptyVerticalPath, the parity tests depend on its branch order
+//nolint:cyclop // port of NikseBitmapImageSplitter2.IsVerticalLineTransparent, the parity tests depend on its branch order
 func emptyVerticalPath(bmp *bitmap, x int) (points []point, right, clean bool) {
 	var left bool
 	leftCount, rightCount := 0, 0
