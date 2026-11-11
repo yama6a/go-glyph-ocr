@@ -1,0 +1,5 @@
+/go.mod linguist-generated=true
+/go.sum linguist-generated=true
+# The glyph databases and the fixtures are compared byte for byte.
+/resources/*.nocr binary
+**/testdata/** -text
