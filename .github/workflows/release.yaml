@@ -1,0 +1,22 @@
+# Tags a release on every merge to main that carries major, minor or patch. A Go library
+# has nothing to build: the Go module proxy serves the module at the tag.
+name: release
+
+on:
+  push:
+    branches: [main]
+
+# Serialised so two runs cannot tag the same version. A cancelled run here loses nothing:
+# the next one recomputes the bump from every PR merged since the last release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the tag and the GitHub release
+
+jobs:
+  release:
+    uses: yama6a/gha/.github/workflows/php-release.yaml@v2
+    with:
+      tag-prefix: v
