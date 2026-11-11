@@ -93,10 +93,3 @@ func listPartner(text, from, to string) (string, bool) {
 	}
 	return string([]rune(to)[utf8.RuneCountInString(from[:i])]), true
 }
-
-func abs(n int) int {
-	if n < 0 {
-		return -n
-	}
-	return n
-}
