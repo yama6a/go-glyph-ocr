@@ -1,0 +1,46 @@
+# Long fuzz run, started by hand. The fuzz job of ci.yaml runs each target for 10 seconds only.
+name: fuzz-long
+
+on:
+  workflow_dispatch:
+    inputs:
+      fuzztime:
+        description: Time per fuzz target, as a Go duration
+        default: 10m
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # one shared key would hand amd64 or fuzz builds to the other jobs
+      - name: Fuzz
+        env:
+          FUZZTIME: ${{ inputs.fuzztime }}
+        run: make fuzz FUZZTIME="$FUZZTIME"
+      # go test -fuzz writes each failing input to <package>/testdata/fuzz/<FuzzName>/.
+      - name: Collect the new fuzz inputs
+        if: failure()
+        env:
+          DEST: ${{ runner.temp }}/fuzz-findings
+        run: |
+          set -euo pipefail
+          mkdir -p "$DEST"
+          git ls-files -z --others --exclude-standard \
+            | { grep -z -E '(^|/)testdata/fuzz/' || true; } \
+            | xargs -0 -r cp --parents -t "$DEST"
+          find "$DEST" -type f
+      - name: Upload the new fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-findings
+          path: ${{ runner.temp }}/fuzz-findings
