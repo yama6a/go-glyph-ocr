@@ -61,7 +61,7 @@ mod:
 
 ci: tidy-check generate-check fmt-check lint vet test vuln
 
-# go-ci builds linux/amd64 and linux/arm64 only. The release also ships darwin and windows binaries.
+# go-ci builds linux/amd64 and linux/arm64 only. Importers also build this module on darwin and windows, so it must compile there.
 cross:
 	for target in darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do \
 		CGO_ENABLED=0 GOOS=$${target%/*} GOARCH=$${target#*/} go build ./... || exit 1; \
@@ -83,5 +83,6 @@ bench:
 
 # Only the packages that declare the -update flag, because another test binary rejects the unknown flag.
 golden:
-	pkgs=$$(grep -rl --include='*_test.go' 'flag.Bool("update"' . | xargs -n1 dirname | sort -u) || exit 1; \
+	pkgs=$$(grep -rl --include='*_test.go' 'flag.Bool("update"' . | xargs -r -n1 dirname | sort -u); \
+	if [ -z "$$pkgs" ]; then echo "no test declares the -update flag" >&2; exit 1; fi; \
 	go test -count=1 -run Golden $$pkgs -update
