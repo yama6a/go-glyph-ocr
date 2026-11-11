@@ -2,7 +2,7 @@ package glyphocr
 
 import "errors"
 
-// These errors are wrapped by the errors that the package returns, so test them with errors.Is.
+// The package wraps these errors in the errors it returns, so test them with errors.Is.
 var (
 	// ErrInvalidOption marks an option value outside its allowed range, or a missing database.
 	ErrInvalidOption = errors.New("glyphocr: invalid option")

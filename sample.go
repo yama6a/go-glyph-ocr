@@ -19,6 +19,9 @@ type Sample struct {
 }
 
 func (s *Sample) validate() error {
+	if s == nil {
+		return fmt.Errorf("%w: sample is nil", ErrInvalidSample)
+	}
 	if s.Width < 1 || s.Height < 1 || len(s.Pixels) != s.Width*s.Height {
 		return fmt.Errorf("%w: sample of %dx%d pixels needs %d pixel values, has %d",
 			ErrInvalidSample, s.Width, s.Height, s.Width*s.Height, len(s.Pixels))
@@ -35,10 +38,8 @@ func MergeSamples(samples ...*Sample) (*Sample, error) {
 	if len(samples) == 0 {
 		return nil, fmt.Errorf("%w: no samples to merge", ErrInvalidSample)
 	}
-	for _, s := range samples {
-		if err := s.validate(); err != nil {
-			return nil, err
-		}
+	if err := validateAll(samples); err != nil {
+		return nil, err
 	}
 	if len(samples) == 1 {
 		return samples[0], nil
@@ -98,4 +99,16 @@ func bounds(samples []*Sample) (minX, minY, maxX, maxY, minTop int) {
 		minTop = min(minTop, s.MarginTop)
 	}
 	return minX, minY, maxX, maxY, minTop
+}
+
+func validateAll(samples []*Sample) error {
+	if len(samples) > maxParts {
+		return fmt.Errorf("%w: %d samples exceed the limit of %d parts", ErrInvalidSample, len(samples), maxParts)
+	}
+	for _, s := range samples {
+		if err := s.validate(); err != nil {
+			return err
+		}
+	}
+	return nil
 }

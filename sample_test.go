@@ -72,6 +72,8 @@ func TestSampleErrors(t *testing.T) {
 			[]*Sample{{Width: 3, Height: 2, Pixels: make([]byte, 5), Parts: 1}},
 			"glyphocr: invalid sample: sample of 3x2 pixels needs 6 pixel values, has 5",
 		},
+		{"nil sample", []*Sample{nil}, "glyphocr: invalid sample: sample is nil"},
+		{"too many samples", make([]*Sample, 256), "glyphocr: invalid sample: 256 samples exceed the limit of 255 parts"},
 		{"parts 0", []*Sample{{Width: 1, Height: 1, Pixels: []byte{1}}}, "glyphocr: invalid sample: sample of 0 parts needs 1 to 255"},
 		{"parts 256", []*Sample{{Width: 1, Height: 1, Pixels: []byte{1}, Parts: 256}}, "glyphocr: invalid sample: sample of 256 parts needs 1 to 255"},
 	}

@@ -103,7 +103,7 @@ func UnknownText(text string) Option {
 // ItalicSlant sets the factor from 0 to 1 by which a glyph that matches nothing is sheared back and tried again.
 func ItalicSlant(factor float64) Option {
 	return func(s *settings) {
-		if factor < 0 || factor > 1 {
+		if !(factor >= 0 && factor <= 1) {
 			s.failf("italic slant %g is outside 0 to 1", factor)
 			return
 		}

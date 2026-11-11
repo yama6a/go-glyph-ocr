@@ -1,6 +1,7 @@
 package glyphocr
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,7 @@ func TestOptionLimits(t *testing.T) {
 		{"slant 0", ItalicSlant(0), ""},
 		{"slant 1", ItalicSlant(1), ""},
 		{"slant -0.1", ItalicSlant(-0.1), "glyphocr: invalid option: italic slant -0.1 is outside 0 to 1"},
+		{"slant NaN", ItalicSlant(math.NaN()), "glyphocr: invalid option: italic slant NaN is outside 0 to 1"},
 		{"slant 1.1", ItalicSlant(1.1), "glyphocr: invalid option: italic slant 1.1 is outside 0 to 1"},
 		{"height 1", MinLineHeight(1), ""},
 		{"height 0", MinLineHeight(0), "glyphocr: invalid option: min line height 0 is below 1"},

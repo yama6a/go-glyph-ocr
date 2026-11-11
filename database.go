@@ -26,7 +26,7 @@ func ReadDatabase(_ io.Reader) (*Database, error) {
 	panic("glyphocr: ReadDatabase is not implemented")
 }
 
-// LoadDatabase reads the .nocr file at path. A read error wraps the file error, a format error wraps ErrInvalidDatabase.
+// LoadDatabase reads the .nocr file at path. A read error wraps the file error. A format error wraps ErrInvalidDatabase.
 func LoadDatabase(_ string) (*Database, error) {
 	panic("glyphocr: LoadDatabase is not implemented")
 }
@@ -51,7 +51,7 @@ func (*Database) Remove(_ *Glyph) bool {
 	panic("glyphocr: Database.Remove is not implemented")
 }
 
-// Glyphs returns the glyphs of the database in match order.
+// Glyphs returns the glyphs of the database in the order the matcher tries them.
 func (*Database) Glyphs() []*Glyph {
 	panic("glyphocr: Database.Glyphs is not implemented")
 }
