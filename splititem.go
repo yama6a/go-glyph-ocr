@@ -4,7 +4,16 @@ package glyphocr
 type splitItem struct {
 	x, y        int
 	bmp         *bitmap // nil for a marker
-	special     string  //nolint:unused // the splitter of #7 sets it. "\n" for a line break, " " for a space, empty for a glyph
+	special     string  // "\n" for a line break, " " for a space, empty for a glyph
 	top         int     // distance from the top of the line part
-	spacePixels int     //nolint:unused // the splitter of #7 sets it. Empty columns before a space marker
+	spacePixels int     // empty columns before a space marker
+}
+
+const (
+	lineBreak = "\n"
+	space     = " "
+)
+
+func marker(special string, y, spacePixels int) splitItem {
+	return splitItem{y: y, special: special, spacePixels: spacePixels}
 }

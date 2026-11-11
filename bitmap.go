@@ -141,7 +141,11 @@ func (b *bitmap) cropEmptySides() *bitmap {
 		}
 	}
 	if right < 0 || (left == 0 && right == b.width-1) {
-		return &bitmap{width: b.width, height: b.height, pixels: append([]byte(nil), b.pixels...)}
+		return b.clone()
 	}
 	return b.copyRectangle(left, 0, right-left+1, b.height)
+}
+
+func (b *bitmap) clone() *bitmap {
+	return &bitmap{width: b.width, height: b.height, pixels: append([]byte(nil), b.pixels...)}
 }

@@ -91,6 +91,7 @@ func TestMatcherOrderAndBudget(t *testing.T) {
 	}{
 		{"exact tie goes to the first glyph", []*Glyph{letterA("first"), letterA("second")}, drawGlyph(letterA(""), 10, 12), 0, "first"},
 		{"12 wrong points: a sensitive glyph has budget 10", []*Glyph{bigGlyph("O"), bigGlyph("A")}, missing(bigGlyph("")), 15, "A"},
+		{"25 percent off in aspect: a sensitive glyph allows 30", []*Glyph{bigGlyph("A"), bigGlyph("O")}, drawGlyph(bigGlyph(""), 40, 50), 15, "O"},
 		{"12 wrong points: a plain glyph has budget 15", []*Glyph{bigGlyph("B"), bigGlyph("A")}, missing(bigGlyph("")), 15, "B"},
 	}
 	for _, tt := range tests {
@@ -120,41 +121,48 @@ func TestMatcherDropsCachesOnAdd(t *testing.T) {
 	assert.Equal(t, "new", res.glyph.Text)
 }
 
-func TestMatcherMultiPart(t *testing.T) {
-	t.Parallel()
-	// A double quote of 2 vertical marks, 6 pixels high, with an empty column between them.
-	quote := func(width, height, markX int) *Glyph {
-		return &Glyph{
-			Text: `"`, Width: width, Height: height, ExpandCount: 2,
-			Foreground: []Segment{{0, 0, 0, height - 1}, {markX, 0, markX, height - 1}},
-			Background: []Segment{{markX / 2, 0, markX / 2, height - 1}},
+// quoteGlyph is a double quote of 2 vertical marks, with an empty column between them.
+func quoteGlyph(width, height, markX int) *Glyph {
+	return &Glyph{
+		Text: `"`, Width: width, Height: height, ExpandCount: 2,
+		Foreground: []Segment{{0, 0, 0, height - 1}, {markX, 0, markX, height - 1}},
+		Background: []Segment{{markX / 2, 0, markX / 2, height - 1}},
+	}
+}
+
+// quoteItems returns a parent bitmap and 2 items that are marks 2 pixels wide and 6 high, at x 2 and secondX.
+func quoteItems(secondX int) (*bitmap, []splitItem) {
+	parent := blank(16, 12)
+	items := make([]splitItem, 2)
+	for i, x := range []int{2, secondX} {
+		items[i] = splitItem{x: x, y: 3, bmp: blank(2, 6)}
+		for j := range items[i].bmp.pixels {
+			items[i].bmp.pixels[j] = 1
+		}
+		for y := range 6 {
+			parent.set(x, 3+y, 1)
+			parent.set(x+1, 3+y, 1)
 		}
 	}
+	return parent, items
+}
+
+func TestMatcherMultiPart(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		glyph      *Glyph
 		secondX    int
 		wantResult bool
 	}{
-		{"unscaled: the box is 2 pixels narrower than the glyph", quote(9, 6, 5), 7, true},
-		{"scaled: the box is 7 wide, the glyph 12", quote(12, 9, 8), 7, true},
-		{"the second mark is out of place", quote(9, 6, 5), 9, false},
+		{"unscaled: the box is 2 pixels narrower than the glyph", quoteGlyph(9, 6, 5), 7, true},
+		{"scaled: the box is 7 wide, the glyph 12", quoteGlyph(12, 9, 8), 7, true},
+		{"the second mark is out of place", quoteGlyph(9, 6, 5), 9, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			parent := blank(16, 12)
-			items := make([]splitItem, 2)
-			for i, x := range []int{2, tt.secondX} {
-				items[i] = splitItem{x: x, y: 3, bmp: blank(2, 6)}
-				for j := range items[i].bmp.pixels {
-					items[i].bmp.pixels[j] = 1
-				}
-				for y := range 6 {
-					parent.set(x, 3+y, 1)
-					parent.set(x+1, 3+y, 1)
-				}
-			}
+			parent, items := quoteItems(tt.secondX)
 			m := newMatcher(newTestDatabase(t, tt.glyph), 0, 0)
 			res, ok := m.match(parent, items, 0)
 			require.Equal(t, tt.wantResult, ok)
@@ -164,6 +172,22 @@ func TestMatcherMultiPart(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMatcherMultiPartAfterPartAlone(t *testing.T) {
+	t.Parallel()
+	parent, items := quoteItems(7)
+	m := newMatcher(newTestDatabase(t, quoteGlyph(9, 6, 5)), 0, 0)
+
+	_, ok := m.match(parent, items[:1], 0)
+	require.False(t, ok, "a lone part has no group to match")
+
+	_, ok = m.match(parent, items, 1)
+	assert.False(t, ok, "the last part starts no group")
+
+	res, ok := m.match(parent, items, 0)
+	require.True(t, ok, "the cached miss must not hide the group")
+	assert.Equal(t, `"`, res.glyph.Text)
 }
 
 func TestMatcherItalic(t *testing.T) {

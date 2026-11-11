@@ -167,7 +167,7 @@ func (m *matcher) matchItalic(bmp *bitmap, top int) (matchResult, bool) {
 		return matchResult{glyph: g, confidence: 1, slanted: true}, true
 	}
 	res, ok := m.matchLoose(straight, top)
-	res.slanted = true
+	res.slanted = ok
 	return res, ok
 }
 
@@ -377,10 +377,9 @@ func (c *counter) walkVertical(sx, sy, ex, ey int) bool {
 
 // matchMultiPart tries the glyphs that span several cut-out items, such as the 2 marks of a double quote.
 func (m *matcher) matchMultiPart(parent *bitmap, items []splitItem, index int) (matchResult, bool) {
-	candidates := m.multiPartCandidates(parent, items[index])
-
-	for _, g := range candidates {
-		if !isUnscaledMatch(g, parent, items, index) {
+	item := items[index]
+	for _, g := range m.db.expanded {
+		if !isMultiPartCandidate(g, parent, item) || !isUnscaledMatch(g, parent, items, index) {
 			continue
 		}
 		boxW, boxH := boxSize(items, index, g.ExpandCount)
@@ -388,7 +387,10 @@ func (m *matcher) matchMultiPart(parent *bitmap, items []splitItem, index int) (
 			return matchResult{glyph: g, confidence: 1}, true
 		}
 	}
-	for _, g := range candidates {
+	for _, g := range m.db.expanded {
+		if !isMultiPartCandidate(g, parent, item) {
+			continue
+		}
 		if conf, ok := matchScaled(g, parent, items, index); ok {
 			return matchResult{glyph: g, confidence: conf}, true
 		}
@@ -396,15 +398,9 @@ func (m *matcher) matchMultiPart(parent *bitmap, items []splitItem, index int) (
 	return matchResult{}, false
 }
 
-// multiPartCandidates returns the multi-part glyphs that are wider than the item and fit in the parent.
-func (m *matcher) multiPartCandidates(parent *bitmap, item splitItem) []*Glyph {
-	var candidates []*Glyph
-	for _, g := range m.db.expanded {
-		if g.ExpandCount > 1 && g.Width > item.bmp.width && item.x+g.Width < parent.width && g.lineCount() > 0 {
-			candidates = append(candidates, g)
-		}
-	}
-	return candidates
+// isMultiPartCandidate reports whether the glyph spans several items, is wider than the item and fits in the parent.
+func isMultiPartCandidate(g *Glyph, parent *bitmap, item splitItem) bool {
+	return g.ExpandCount > 1 && g.Width > item.bmp.width && item.x+g.Width < parent.width && g.lineCount() > 0
 }
 
 func matchScaled(g *Glyph, parent *bitmap, items []splitItem, index int) (float64, bool) {
