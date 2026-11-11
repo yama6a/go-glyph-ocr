@@ -26,9 +26,7 @@ func TestRounding(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.away, roundHalfAway(tt.in))
-			if !math.IsNaN(tt.in) {
-				assert.Equal(t, tt.even, roundHalfEven(tt.in))
-			}
+			assert.Equal(t, tt.even, roundHalfEven(tt.in))
 		})
 	}
 }

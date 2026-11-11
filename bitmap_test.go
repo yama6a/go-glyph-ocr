@@ -83,6 +83,29 @@ func TestBitmapOperations(t *testing.T) {
 			b.addEmptyColumnRight()
 			return b, &bitmap{width: 3, height: 2, pixels: []byte{1, 0, 0, 0, 1, 0}}
 		}},
+		{"cropEmptySides", func() (any, any) {
+			return bitmapOf(4, ".#..", "..#.").cropEmptySides(), bitmapOf(2, "#.", ".#")
+		}},
+		{"cropEmptySides copies when nothing to crop", func() (any, any) {
+			full := bitmapOf(2, "#.", ".#")
+			same := full.cropEmptySides()
+			same.pixels[0] = 0
+			return []any{same.width, full.pixels[0]}, []any{2, byte(1)}
+		}},
+		{"cropEmptySides without ink", func() (any, any) {
+			return blank(3, 2).cropEmptySides(), blank(3, 2)
+		}},
+		{"unItalic shifts rows", func() (any, any) {
+			b := blank(3, 10)
+			for y := range 10 {
+				b.set(0, y, 1)
+			}
+			want := blank(3, 10)
+			for y, shift := range []int{0, 0, 0, 1, 1, 1, 1, 1, 2, 2} {
+				want.set(shift, y, 1)
+			}
+			return b.unItalic(0.2), want
+		}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -91,32 +114,4 @@ func TestBitmapOperations(t *testing.T) {
 			assert.Equal(t, want, got)
 		})
 	}
-}
-
-func TestBitmapCropEmptySides(t *testing.T) {
-	t.Parallel()
-	got := bitmapOf(4, ".#..", "..#.").cropEmptySides()
-	assert.Equal(t, bitmapOf(2, "#.", ".#"), got)
-
-	full := bitmapOf(2, "#.", ".#")
-	same := full.cropEmptySides()
-	assert.Equal(t, full, same)
-	same.pixels[0] = 0
-	assert.Equal(t, byte(1), full.pixels[0])
-
-	assert.Equal(t, blank(3, 2), blank(3, 2).cropEmptySides())
-}
-
-func TestBitmapUnItalic(t *testing.T) {
-	t.Parallel()
-	b := blank(3, 10)
-	for y := range 10 {
-		b.set(0, y, 1)
-	}
-	got := b.unItalic(0.2)
-	want := blank(3, 10)
-	for y, shift := range []int{0, 0, 0, 1, 1, 1, 1, 1, 2, 2} {
-		want.set(shift, y, 1)
-	}
-	assert.Equal(t, want, got)
 }

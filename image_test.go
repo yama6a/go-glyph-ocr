@@ -16,8 +16,6 @@ import (
 
 const testThreshold = 200
 
-func pixelsOf(b *bitmap) []byte { return b.pixels }
-
 func TestNewInkBitmapImageTypes(t *testing.T) {
 	t.Parallel()
 	nrgba := image.NewNRGBA(image.Rect(0, 0, 6, 1))
@@ -86,7 +84,7 @@ func TestNewInkBitmapImageTypes(t *testing.T) {
 			got := newInkBitmap(tt.img, testThreshold)
 			assert.Equal(t, len(tt.want), got.width)
 			assert.Equal(t, 1, got.height)
-			assert.Equal(t, tt.want, pixelsOf(got))
+			assert.Equal(t, tt.want, got.pixels)
 		})
 	}
 }
@@ -113,8 +111,13 @@ func pngChunk(kind string, data []byte) []byte {
 	return binary.BigEndian.AppendUint32(out, crc32.ChecksumIEEE(append([]byte(kind), data...)))
 }
 
-// buildPNG returns a PNG of one row. extra holds PLTE or tRNS chunks as name and data pairs.
-func buildPNG(t *testing.T, width, depth, colourType int, extra [][2]any, row []byte) []byte {
+type extraChunk struct {
+	kind string
+	data []byte
+}
+
+// buildPNG returns a PNG of one row. extra holds the PLTE or tRNS chunks.
+func buildPNG(t *testing.T, width, depth, colourType int, extra []extraChunk, row []byte) []byte {
 	t.Helper()
 	ihdr := binary.BigEndian.AppendUint32(nil, uint32(width))
 	ihdr = binary.BigEndian.AppendUint32(ihdr, 1)
@@ -128,7 +131,7 @@ func buildPNG(t *testing.T, width, depth, colourType int, extra [][2]any, row []
 	out := []byte("\x89PNG\r\n\x1a\n")
 	out = append(out, pngChunk("IHDR", ihdr)...)
 	for _, e := range extra {
-		out = append(out, pngChunk(e[0].(string), e[1].([]byte))...)
+		out = append(out, pngChunk(e.kind, e.data)...)
 	}
 	out = append(out, pngChunk("IDAT", idat.Bytes())...)
 	return append(out, pngChunk("IEND", nil)...)
@@ -141,49 +144,62 @@ func TestNewInkBitmapPNG(t *testing.T) {
 		width int
 		depth int
 		ct    int
-		extra [][2]any
+		extra []extraChunk
 		row   []byte
+		typ   image.Image
 		want  []byte
 	}{
-		{"grey 1-bit", 4, 1, 0, nil, []byte{0b10100000}, []byte{1, 0, 1, 0}},
+		{"grey 1-bit", 4, 1, 0, nil, []byte{0b10100000}, &image.Gray{}, []byte{1, 0, 1, 0}},
 		{
 			"grey 8 with tRNS", 4, 8, 0,
-			[][2]any{{"tRNS", []byte{0, 100}}},
+			[]extraChunk{{"tRNS", []byte{0, 100}}},
 			[]byte{255, 100, 70, 60},
+			&image.NRGBA{},
 			[]byte{1, 0, 1, 0},
 		},
 		{
 			"grey 16", 4, 16, 0, nil,
 			[]byte{0xFF, 0xFF, 0x20, 0, 0x55, 0, 0, 0},
+			&image.Gray16{},
 			[]byte{1, 0, 1, 0},
 		},
 		{
 			"RGB 8 with tRNS", 4, 8, 2,
-			[][2]any{{"tRNS", []byte{0, 10, 0, 10, 0, 10}}},
+			[]extraChunk{{"tRNS", []byte{0, 10, 0, 10, 0, 10}}},
 			[]byte{255, 255, 0, 10, 10, 10, 100, 100, 0, 60, 60, 60},
+			&image.NRGBA{},
 			[]byte{1, 0, 1, 0},
 		},
-		{"RGB 16", 4, 16, 2, nil, []byte{
-			0xFF, 0, 0xFF, 0, 0, 0, 0x10, 0, 0x10, 0, 0x10, 0, 0x64, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		}, []byte{1, 0, 1, 0}},
-		{"palette 2-bit with tRNS", 4, 2, 3, [][2]any{
-			{"PLTE", []byte{255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255}},
-			{"tRNS", []byte{255, 255, 66, 67}},
-		}, []byte{0b00011011}, []byte{1, 0, 0, 1}},
-		{"grey with alpha 16", 5, 16, 4, nil, []byte{
-			0xFF, 0xFF, 0x43, 0, 0xFF, 0xFF, 0x42, 0, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-		}, []byte{1, 0, 0, 0, 1}},
+		{
+			"RGB 16", 4, 16, 2, nil,
+			[]byte{0xFF, 0, 0xFF, 0, 0, 0, 0x10, 0, 0x10, 0, 0x10, 0, 0x64, 0, 0x64, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			&image.RGBA64{},
+			[]byte{1, 0, 1, 0},
+		},
+		{
+			"palette 2-bit with tRNS", 4, 2, 3,
+			[]extraChunk{
+				{"PLTE", []byte{255, 255, 255, 0, 0, 0, 255, 255, 255, 255, 255, 255}},
+				{"tRNS", []byte{255, 255, 66, 67}},
+			},
+			[]byte{0b00011011},
+			&image.Paletted{},
+			[]byte{1, 0, 0, 1},
+		},
+		{
+			"grey with alpha 16", 5, 16, 4, nil,
+			[]byte{0xFF, 0xFF, 0x43, 0, 0xFF, 0xFF, 0x42, 0, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+			&image.NRGBA64{},
+			[]byte{1, 0, 0, 0, 1},
+		},
 	}
-	wantTypes := []any{
-		&image.Gray{}, &image.NRGBA{}, &image.Gray16{}, &image.NRGBA{}, &image.RGBA64{}, &image.Paletted{}, &image.NRGBA64{},
-	}
-	for i, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			img, err := png.Decode(bytes.NewReader(buildPNG(t, tt.width, tt.depth, tt.ct, tt.extra, tt.row)))
 			require.NoError(t, err)
-			assert.IsType(t, wantTypes[i], img)
-			assert.Equal(t, tt.want, pixelsOf(newInkBitmap(img, testThreshold)))
+			assert.IsType(t, tt.typ, img)
+			assert.Equal(t, tt.want, newInkBitmap(img, testThreshold).pixels)
 		})
 	}
 }
@@ -194,7 +210,7 @@ func TestNewInkBitmapThreshold(t *testing.T) {
 	img.SetNRGBA(0, 0, color.NRGBA{255, 255, 255, 0x43})
 	img.SetNRGBA(1, 0, color.NRGBA{0, 0, 0, 255})
 
-	assert.Equal(t, []byte{1, 0}, pixelsOf(newInkBitmap(img, 201)))
-	assert.Equal(t, []byte{0, 0}, pixelsOf(newInkBitmap(img, 202)))
-	assert.Equal(t, []byte{1, 1}, pixelsOf(newInkBitmap(img, 0)))
+	assert.Equal(t, []byte{1, 0}, newInkBitmap(img, 201).pixels)
+	assert.Equal(t, []byte{0, 0}, newInkBitmap(img, 202).pixels)
+	assert.Equal(t, []byte{1, 1}, newInkBitmap(img, 0).pixels)
 }

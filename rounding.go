@@ -16,5 +16,8 @@ func roundHalfAway(v float64) int {
 
 // roundHalfEven rounds half to even, as .NET Math.Round without a midpoint argument.
 func roundHalfEven(v float64) int {
+	if math.IsNaN(v) {
+		return 0
+	}
 	return int(math.RoundToEven(v))
 }
