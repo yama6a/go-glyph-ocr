@@ -1,0 +1,51 @@
+bluray/01.png | I don't know what you mean.
+bluray/02.png | Where were you last night? / I waited for hours.
+bluray/03.png | We bave to leave, now!
+bluray/04.png | It's 10:30 already.
+bluray/05.png | Thank you, Mr. Jensen. / Good night.
+bluray/06.png | Nobody s* anything, right?
+bluray/07.png | The train leaves at 7:45. / Do not be late.
+bluray/08.png | What happened to the money?
+capital-i/01.png | I'll tell Lily I'm ill. / Is it illegal?
+capital-i/02.png | If I fall, I'll call you. / Lisa will help.
+capital-i/03.png | IT IS ALL I HAVE.
+capital-i/04.png | Il est là. Ils l'aiment.
+capital-i/05.png | I hope Isla likes it. / I lied.
+capital-i/06.png | Lily, I told you.
+capital-i/07.png | I think I lost Lucy's ball.
+capital-i/08.png | Is Ian in Lisbon?
+capital-i/09.png | I really liked it.
+capital-i/10.png | Alice is all I need.
+capital-i/11.png | I will look later.
+capital-i/12.png | I*ll call Bill.
+capital-i/13.png | I like it. Lola does not.
+capital-i/14.png | Is Lílle in Belgium?
+dvd/01.png | Come on, hurry up!
+dvd/02.png | Wby did you dG that? / You prGmised me.
+dvd/03.png | Turn lea at the bridge.
+dvd/04.png | Maybe tomorrow, maybe never. / Who knows?
+dvd/05.png | Don't move.
+dvd/06.png | Twen* years ago, in 1999.
+italic/01.png | She is not coming back.
+italic/02.png | Remember what I toldyou. / AIways.
+italic/03.png | Long ago, in a small town...
+italic/04.png | Is anybody there?
+pgs/01.png | Get in the car. Quickly!
+pgs/02.png | - Are you sure? / - Yes, I am.
+pgs/03.png | I'll be back in 5 minutes.
+pgs/04.png | Hello, my friend. / How are you?
+pgs/05.png | Let me go!
+pgs/06.png | Which way is the station?
+plain/01.png | Good morning, everybody.
+plain/02.png | Open the door. / slowly.
+plain/03.png | Wait for me here.
+plain/04.png | Six apples and nine pears.
+small/01.png | See you later.
+small/02.png | Call the police* / Now!
+small/03.png | Is this your bag?
+unseen/01.png | I don't believe it. / Let's go home.
+unseen/02.png | Where is the hospital?
+unseen/03.png | Call me when you land. / I will wait.
+unseen/04.png | It was a lon* ni*ht.
+unseen/05.png | Brín8 the keys, please.
+unseen/06.png | Is everyone ceady?
