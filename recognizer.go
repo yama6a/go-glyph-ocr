@@ -3,6 +3,7 @@ package glyphocr
 import (
 	"image"
 	"math"
+	"slices"
 )
 
 // Recognizer reads the text of clean rendered text bitmaps. It learns glyph heights from
@@ -16,11 +17,12 @@ type Recognizer struct {
 	capitalIFixer *capitalIFixer
 }
 
-// warmUpSamples is the number of glyphs the temporary tracker of the first image needs.
-const warmUpSamples = 3
-
-// recognizerWarmUpSamples is the number of glyphs the tracker of a recognizer needs before it is warm.
-const recognizerWarmUpSamples = 21
+const (
+	// warmUpSamples is the number of glyphs the temporary tracker needs. A recognizer builds one for
+	// every image until its own tracker has seen recognizerWarmUpSamples glyphs.
+	warmUpSamples           = 3
+	recognizerWarmUpSamples = 21
+)
 
 // NewRecognizer returns a recognizer that matches against db. It returns the errors of all
 // invalid options joined, each wrapping ErrInvalidOption.
@@ -37,7 +39,7 @@ func NewRecognizer(db *Database, opts ...Option) (*Recognizer, error) {
 	}
 	r := &Recognizer{
 		settings: s,
-		matcher:  newMatcher(db, s.maxWrongPixels, s.italicSlant),
+		matcher:  newMatcher(db, s.maxWrongPixels, s.italicSlant, s.rightToLeft),
 	}
 	r.Reset()
 	return r, nil
@@ -57,17 +59,14 @@ func (r *Recognizer) Recognize(img image.Image) Result {
 
 	var lines []Line
 	var chars []Char
-	closeLine := func() {
-		if len(chars) > 0 {
-			lines = append(lines, r.line(chars))
-		}
-		chars = nil
-	}
 	for i := 0; i < len(items); i++ {
 		item := items[i]
 		if item.bmp == nil {
 			if item.special == lineBreak {
-				closeLine()
+				if len(chars) > 0 {
+					lines = append(lines, r.line(chars))
+				}
+				chars = nil
 			} else {
 				chars = append(chars, Char{Text: " ", Confidence: 1, Space: true})
 			}
@@ -81,7 +80,7 @@ func (r *Recognizer) Recognize(img image.Image) Result {
 		}
 
 		parts := max(1, m.glyph.ExpandCount)
-		sample := glyphSample(items, i, parts, origin, cropped)
+		sample := r.glyphSample(items, i, parts, origin, cropped)
 		text := m.glyph.Text
 		if r.settings.fixLatinCase {
 			text = r.caseFixer.fix(text, item.bmp.height)
@@ -95,12 +94,13 @@ func (r *Recognizer) Recognize(img image.Image) Result {
 		})
 		i += parts - 1
 	}
-	closeLine()
+	if len(chars) > 0 {
+		lines = append(lines, r.line(chars))
+	}
 
 	return Result{Lines: lines}
 }
 
-// line runs the line context fixes on chars and returns the line.
 func (r *Recognizer) line(chars []Char) Line {
 	if r.settings.lineContext {
 		fixMarks(chars)
@@ -111,35 +111,33 @@ func (r *Recognizer) line(chars []Char) Line {
 }
 
 // Split cuts img into lines of glyph samples without matching them. A nil sample is a space.
+// Split teaches the recognizer the glyph heights, as Recognize does, so it changes the next read.
 func (r *Recognizer) Split(img image.Image) [][]*Sample {
 	_, cropped, items := r.splitImage(img)
 	origin := img.Bounds().Min
 
 	var lines [][]*Sample
 	var line []*Sample
-	closeLine := func() {
-		if len(line) > 0 {
-			lines = append(lines, line)
-		}
-		line = nil
-	}
 	for _, item := range items {
 		switch {
 		case item.special == lineBreak:
-			closeLine()
+			if len(line) > 0 {
+				lines = append(lines, line)
+			}
+			line = make([]*Sample, 0, 16)
 		case item.bmp == nil:
 			line = append(line, nil)
 		default:
 			line = append(line, itemSample(item, origin, cropped))
 		}
 	}
-	closeLine()
+	if len(line) > 0 {
+		lines = append(lines, line)
+	}
 
 	return lines
 }
 
-// splitImage cuts img into glyph and marker items. It returns the ink bitmap, the number of empty rows
-// cut off its top, and the items, and it teaches the line height tracker.
 func (r *Recognizer) splitImage(img image.Image) (bmp *bitmap, cropped int, items []splitItem) {
 	s := r.settings
 	bmp = newInkBitmap(img, s.inkThreshold)
@@ -167,7 +165,6 @@ func (r *Recognizer) splitImage(img image.Image) (bmp *bitmap, cropped int, item
 	return bmp, cropped, items
 }
 
-// itemSample returns the sample of a glyph item, in the coordinates of the image.
 func itemSample(item splitItem, origin image.Point, cropped int) *Sample {
 	return &Sample{
 		X:         item.x + origin.X,
@@ -175,13 +172,14 @@ func itemSample(item splitItem, origin image.Point, cropped int) *Sample {
 		Width:     item.bmp.width,
 		Height:    item.bmp.height,
 		MarginTop: item.top,
-		Pixels:    append([]byte(nil), item.bmp.pixels...),
+		Pixels:    slices.Clone(item.bmp.pixels),
 		Parts:     1,
 	}
 }
 
 // glyphSample returns the sample of the glyph at items[i], merged over its parts when it has several.
-func glyphSample(items []splitItem, i, parts int, origin image.Point, cropped int) *Sample {
+// A right-to-left line lists the parts from the right, and MergeSamples wants the leftmost part first.
+func (r *Recognizer) glyphSample(items []splitItem, i, parts int, origin image.Point, cropped int) *Sample {
 	if parts == 1 || i+parts > len(items) {
 		return itemSample(items[i], origin, cropped)
 	}
@@ -189,10 +187,13 @@ func glyphSample(items []splitItem, i, parts int, origin image.Point, cropped in
 	for j := range samples {
 		samples[j] = itemSample(items[i+j], origin, cropped)
 	}
+	if r.settings.rightToLeft {
+		slices.Reverse(samples)
+	}
 	// The parts are glyph items of one image, so the samples are valid and the merge cannot fail.
 	merged, err := MergeSamples(samples...)
 	if err != nil {
-		return samples[0]
+		panic(err)
 	}
 	return merged
 }

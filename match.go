@@ -2,7 +2,10 @@
 
 package glyphocr
 
-import "math"
+import (
+	"math"
+	"slices"
+)
 
 const (
 	// A glyph below this pixel area compares its aspect ratio as a ratio, not as a difference.
@@ -101,17 +104,19 @@ type matcher struct {
 	db             *Database
 	maxWrongPixels int
 	italicSlant    float64
+	rightToLeft    bool
 	passes         []loosePass
 	revision       int
 	results        map[resultKey]cachedResult
 	walks          map[walkKey]walkIndexes
 }
 
-func newMatcher(db *Database, maxWrongPixels int, italicSlant float64) *matcher {
+func newMatcher(db *Database, maxWrongPixels int, italicSlant float64, rightToLeft bool) *matcher {
 	return &matcher{
 		db:             db,
 		maxWrongPixels: maxWrongPixels,
 		italicSlant:    italicSlant,
+		rightToLeft:    rightToLeft,
 		passes:         newLoosePasses(),
 		revision:       db.revision,
 		results:        map[resultKey]cachedResult{},
@@ -377,25 +382,43 @@ func (c *counter) walkVertical(sx, sy, ex, ey int) bool {
 
 // matchMultiPart tries the glyphs that span several cut-out items, such as the 2 marks of a double quote.
 func (m *matcher) matchMultiPart(parent *bitmap, items []splitItem, index int) (matchResult, bool) {
-	item := items[index]
 	for _, g := range m.db.expanded {
-		if !isMultiPartCandidate(g, parent, item) || !isUnscaledMatch(g, parent, items, index) {
+		group, first, ok := m.candidate(g, parent, items, index)
+		if !ok || !isUnscaledMatch(g, parent, group, first) {
 			continue
 		}
-		boxW, boxH := boxSize(items, index, g.ExpandCount)
+		boxW, boxH := boxSize(group, first, g.ExpandCount)
 		if abs(boxW-g.Width) < 3 && abs(boxH-g.Height) < 3 {
 			return matchResult{glyph: g, confidence: 1}, true
 		}
 	}
 	for _, g := range m.db.expanded {
-		if !isMultiPartCandidate(g, parent, item) {
+		group, first, ok := m.candidate(g, parent, items, index)
+		if !ok {
 			continue
 		}
-		if conf, ok := matchScaled(g, parent, items, index); ok {
+		if conf, ok := matchScaled(g, parent, group, first); ok {
 			return matchResult{glyph: g, confidence: conf}, true
 		}
 	}
 	return matchResult{}, false
+}
+
+// candidate returns the items of g from its left edge, and false when g cannot start there.
+func (m *matcher) candidate(g *Glyph, parent *bitmap, items []splitItem, index int) (group []splitItem, first int, ok bool) {
+	group, first = m.leftToRight(items, index, g.ExpandCount)
+	return group, first, group[first].bmp != nil && isMultiPartCandidate(g, parent, group[first])
+}
+
+// leftToRight returns the items and the index at which a glyph of count parts starts at its left edge.
+// A right-to-left line lists the parts from the right, so the group is reversed.
+func (m *matcher) leftToRight(items []splitItem, index, count int) ([]splitItem, int) {
+	if !m.rightToLeft || index+count > len(items) {
+		return items, index
+	}
+	group := slices.Clone(items[index : index+count])
+	slices.Reverse(group)
+	return group, 0
 }
 
 // isMultiPartCandidate reports whether the glyph spans several items, is wider than the item and fits in the parent.

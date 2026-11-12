@@ -56,6 +56,7 @@ func TestRecognize(t *testing.T) {
 		opts  []Option
 		text  string
 	}{
+		{"empty image", Latin, "", nil, ""},
 		{"empty database", func() *Database { return &Database{} }, "pgs/05", nil, "*** ** ***"},
 		{"unknown text", func() *Database { return &Database{} }, "pgs/05", []Option{UnknownText("?")}, "??? ?? ???"},
 		{"fixed space width", Latin, "pgs/05", []Option{SpaceWidth(1000)}, "Letmego!"},
@@ -66,8 +67,13 @@ func TestRecognize(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			res := newTestRecognizer(t, tt.db(), tt.opts...).Recognize(loadFixture(t, tt.image))
+			var img image.Image = image.NewNRGBA(image.Rect(0, 0, 10, 10))
+			if tt.image != "" {
+				img = loadFixture(t, tt.image)
+			}
+			res := newTestRecognizer(t, tt.db(), tt.opts...).Recognize(img)
 			assert.Equal(t, tt.text, res.Text())
+			assert.Equal(t, tt.text == "", len(res.Lines) == 0)
 		})
 	}
 }
@@ -79,8 +85,10 @@ func TestRecognizeEmptyDatabaseDetails(t *testing.T) {
 	assert.InDelta(t, 0, res.Confidence(), 0)
 	unknown := res.UnknownChars()
 	require.Len(t, unknown, 8)
-	assert.NotNil(t, unknown[0].Sample)
-	assert.Nil(t, unknown[0].Glyph)
+	for _, c := range unknown {
+		assert.NotNil(t, c.Sample)
+		assert.Nil(t, c.Glyph)
+	}
 
 	var spaces []Char
 	for _, c := range res.Lines[0].Chars {
@@ -92,15 +100,6 @@ func TestRecognizeEmptyDatabaseDetails(t *testing.T) {
 	assert.InDelta(t, 1, spaces[0].Confidence, 0)
 	assert.Nil(t, spaces[0].Sample)
 	assert.True(t, spaces[0].Known())
-}
-
-func TestRecognizeEmptyImage(t *testing.T) {
-	t.Parallel()
-
-	res := newTestRecognizer(t, Latin()).Recognize(image.NewNRGBA(image.Rect(0, 0, 10, 10)))
-	assert.Empty(t, res.Lines)
-	assert.Empty(t, res.Text())
-	assert.InDelta(t, 0, res.Confidence(), 0)
 }
 
 func TestRecognizeItalicSlant(t *testing.T) {
@@ -204,18 +203,82 @@ func TestResetGivesTheReadOfANewRecognizer(t *testing.T) {
 	assert.Equal(t, fresh.Recognize(second), used.Recognize(second))
 }
 
-func TestCachesDoNotChangeReads(t *testing.T) {
+func TestCachesDoNotChangeMatches(t *testing.T) {
 	t.Parallel()
 
-	for _, db := range []func() *Database{Latin, SubtitleFonts} {
-		cached := newTestRecognizer(t, db())
-		uncached := newTestRecognizer(t, db())
-		for _, name := range goldenImages(t) {
-			img := loadFixture(t, name)
-			clear(uncached.matcher.results)
-			clear(uncached.matcher.walks)
-			assert.Equal(t, uncached.Recognize(img).Text(), cached.Recognize(img).Text(), name)
+	tests := []struct {
+		name  string
+		db    func() *Database
+		slant float64
+	}{
+		{"latin with slant", Latin, 0.2},
+		{"subtitle fonts", SubtitleFonts, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			db := tt.db()
+			r := newTestRecognizer(t, db, ItalicSlant(tt.slant))
+			uncached := newMatcher(db, DefaultMaxWrongPixels, tt.slant, false)
+			for _, name := range goldenImages(t) {
+				bmp, _, items := r.splitImage(loadFixture(t, name))
+				for i, item := range items {
+					if item.bmp == nil {
+						continue
+					}
+					clear(uncached.results)
+					clear(uncached.walks)
+					want, wantOK := uncached.match(bmp, items, i)
+					got, gotOK := r.matcher.match(bmp, items, i)
+					assert.Equal(t, wantOK, gotOK, "%s item %d", name, i)
+					assert.Equal(t, want, got, "%s item %d", name, i)
+				}
+			}
+		})
+	}
+}
+
+func TestRecognizeRightToLeftMultiPart(t *testing.T) {
+	t.Parallel()
+
+	img := image.NewNRGBA(image.Rect(0, 0, 40, 30))
+	white := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
+	for _, x0 := range []int{10, 18, 28} {
+		w := 3
+		if x0 == 28 {
+			w = 5
 		}
+		for y := 5; y < 13+12*(x0/28); y++ {
+			for x := x0; x < x0+w; x++ {
+				img.SetNRGBA(x, y, white)
+			}
+		}
+	}
+	parts := newTestRecognizer(t, &Database{}).Split(img)[0]
+	pair, err := MergeSamples(parts[0], parts[1])
+	require.NoError(t, err)
+	trainer, err := NewTrainer(DefaultLineCount, 0)
+	require.NoError(t, err)
+	quote, err := trainer.Train(pair, `"`, false)
+	require.NoError(t, err)
+	db := &Database{}
+	require.NoError(t, db.Add(quote))
+
+	for _, opts := range [][]Option{nil, {RightToLeft()}} {
+		res := newTestRecognizer(t, db, opts...).Recognize(img)
+		require.Len(t, res.Lines, 1)
+		assert.Len(t, res.UnknownChars(), 1, "only the bar is unknown")
+		var got *Char
+		for _, c := range res.Lines[0].Chars {
+			if c.Text == `"` {
+				got = &c
+			}
+		}
+		require.NotNil(t, got)
+		assert.Equal(t, 2, got.Sample.Parts)
+		assert.Equal(t, pair.Width, got.Sample.Width)
+		assert.Equal(t, pair.X, got.Sample.X)
 	}
 }
 
@@ -240,6 +303,25 @@ func FuzzRecognize(f *testing.F) {
 	})
 }
 
+// mismatchedDatabase holds the glyphs of Latin() with the ink and background segments swapped.
+// They pass the size and aspect checks of every loose pass and never match, so the slow path runs.
+func mismatchedDatabase(tb testing.TB) *Database {
+	tb.Helper()
+	latin := Latin().Glyphs()
+	glyphs := make([]*Glyph, 0, len(latin))
+	for _, g := range latin {
+		c := *g
+		c.Foreground, c.Background = g.Background, g.Foreground
+		glyphs = append(glyphs, &c)
+	}
+	db, err := NewDatabase(glyphs...)
+	require.NoError(tb, err)
+
+	return db
+}
+
+// BenchmarkRecognize reads every golden image with a recognizer that starts each image with empty
+// match caches, so the time is the cost of a first read and not of a cache hit.
 func BenchmarkRecognize(b *testing.B) {
 	names := goldenImages(b)
 	images := make([]image.Image, len(names))
@@ -249,15 +331,13 @@ func BenchmarkRecognize(b *testing.B) {
 	for _, db := range []struct {
 		name string
 		db   *Database
-	}{{"latin", Latin()}, {"subtitle-fonts", SubtitleFonts()}, {"no-match", &Database{}}} {
+	}{{"latin", Latin()}, {"subtitle-fonts", SubtitleFonts()}, {"no-match", mismatchedDatabase(b)}} {
 		b.Run(db.name, func(b *testing.B) {
 			r := newTestRecognizer(b, db.db)
-			for _, img := range images {
-				r.Recognize(img)
-			}
-			b.ResetTimer()
 			for range b.N {
 				for _, img := range images {
+					clear(r.matcher.results)
+					clear(r.matcher.walks)
 					r.Recognize(img)
 				}
 			}
