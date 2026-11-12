@@ -7,7 +7,7 @@ The engine cuts an image into lines and glyphs and compares each glyph with a da
 ## Install
 
 ```sh
-go get github.com/yama6a/go-glyph-ocr
+go get github.com/yama6a/go-glyph-ocr@v1.0.0
 ```
 
 Needs Go 1.27 or later. No cgo and no dependency beyond the standard library.
@@ -218,4 +218,15 @@ make fuzz    # every fuzz target for FUZZTIME, 30 s by default
 make bench   # every benchmark
 ```
 
-Every merge to `main` with a `major`, `minor` or `patch` label is a release. The `skip-release` label releases nothing.
+## Releases
+
+Every merge to `main` with a `major`, `minor` or `patch` label publishes a release. The version check in `ci.yaml` fails a PR without one of the 4 labels.
+
+| Label | Use it when | Example |
+|:--- |:--- |:--- |
+| `major` | An exported identifier or a documented behaviour breaks. The PR also changes the module path to `github.com/yama6a/go-glyph-ocr/vN` in the same PR. | v1.4.2 becomes v2.0.0 |
+| `minor` | The PR adds an option, a function or glyphs to an embedded database. | v1.4.2 becomes v1.5.0 |
+| `patch` | The PR fixes a bug or bumps a dependency. | v1.4.2 becomes v1.4.3 |
+| `skip-release` | The PR changes only docs, tests or CI. It publishes nothing. | v1.4.2 stays |
+
+A minor or patch release can change the text read from an image, for example when it improves the matcher. Such a release states it in its notes, with the accuracy table before and after.
