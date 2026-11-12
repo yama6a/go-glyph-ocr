@@ -50,13 +50,11 @@ func ExampleTrainer_Train() {
 	}
 
 	letters := []rune("Hello,myfriend.Howareyou?")
-	next := 0
-	for _, c := range r.Recognize(img).UnknownChars() {
-		g, err := t.Train(c.Sample, string(letters[next]), false)
+	for i, c := range r.Recognize(img).UnknownChars() {
+		g, err := t.Train(c.Sample, string(letters[i]), false)
 		if err != nil {
 			panic(err)
 		}
-		next++
 		if err := empty.Add(g); err != nil {
 			panic(err)
 		}

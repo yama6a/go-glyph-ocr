@@ -53,18 +53,18 @@ Pass options to `NewRecognizer` after the database:
 | `ItalicSlant(factor)` | `0` | Above 0, a glyph that matches nothing is slanted back by this factor and tried again. 0 to 1 |
 | `RightToLeft()` | off | Puts the glyphs of each line in right to left order |
 | `MinLineHeight(pixels)` | `12` | Minimum line height until the recognizer has learned the glyph heights |
-| `NoLineContext()` | context on | Keeps the database text of each glyph. By default the recognizer compares each glyph with the other glyphs of its line to pick I or l, o, O or 0, and comma or apostrophe. The off setting is what Subtitle Edit does |
+| `NoLineContext()` | context on | Keeps the database text of each glyph, as Subtitle Edit does. By default the recognizer compares each glyph with the other glyphs of its line. It picks I or l, o, O or 0, and comma or apostrophe |
 
 ## Databases and training
 
 `Database` reads and writes the `.nocr` files of Subtitle Edit, version 1 and 2. The module embeds two databases:
 
-| Function | Glyphs | File size | Load time | Heap |
+| Function | Glyphs | File size | Load time | Allocated per load |
 |:--- | ---:| ---:| ---:| ---:|
-| `SubtitleFonts()` | 2,007 | 254 KB + 477 KB | 18 ms | 8.4 MB |
-| `Latin()` | 699 | 477 KB | 11 ms | 5.3 MB |
+| `SubtitleFonts()` | 2,007 | 254 KB + 477 KB | 19 ms | 12.1 MB |
+| `Latin()` | 699 | 477 KB | 11 ms | 7.6 MB |
 
-Load time and heap are for the first call in a process. Later calls copy the parsed database. Measured on the machine of the Speed section.
+`BenchmarkSubtitleFonts` and `BenchmarkLatin` measure the load. Each parses the embedded files, and the `SubtitleFonts()` load parses both files. The first call of `SubtitleFonts()` or `Latin()` in a process does this work. Later calls copy the parsed database.
 
 - **`SubtitleFonts()`**: glyphs trained on DejaVu Sans, Liberation Sans and Noto Sans, upright and italic, at 28 and 48 px, followed by the Latin database for other fonts. Liberation Sans has the metrics of Arial. Use this database for subtitles.
 - **`Latin()`**: the Latin database of Subtitle Edit, unchanged. Use it to get the same result as Subtitle Edit.
@@ -99,7 +99,7 @@ return db.Save("my-font.nocr")
 
 - `Recognizer.Split` returns the glyph samples of each line without matching them, with `nil` for a space.
 - `MergeSamples` joins the parts of a character that the splitter cuts apart, such as `"` or `%`.
-- The trainer draws random line segments with a seeded generator, so the same sample and seed give the same glyph. With the same seed it gives the glyphs of php-glyph-ocr.
+- The trainer draws random line segments with a seeded generator, so the same seed and the same samples in the same order give the same glyphs. With the same seed it gives the glyphs of php-glyph-ocr.
 
 ## Accuracy
 
@@ -126,18 +126,19 @@ Character accuracy is 1 minus the edit distance divided by the length of the exp
 
 ## Speed
 
-Benchmark `BenchmarkRecognize` reads the 51 golden images, one after another, with empty match caches. Every image is a cold read. Mean time per image, after the database is loaded:
+`BenchmarkRecognize` reads the 51 golden images one after another, with empty match caches. Every image is a cold read. The times are per image, after the database is loaded:
 
 | Database | Time per image | Time per pass over 51 images |
 |:--- | ---:| ---:|
 | `SubtitleFonts()` | 7 ms | 0.36 s |
-| `Latin()` | 19 ms | 0.95 s |
-| Glyphs that match nothing | 34 ms | 1.74 s |
+| `Latin()` | 18 ms | 0.94 s |
+| Database that matches nothing | 37 ms | 1.90 s |
 
-- A glyph that matches nothing is the slow case, because it runs through every match pass. So the subtitle fonts database is faster on the fonts it knows. The third row reads with a database that has none of the glyphs.
-- A 1920x1080 frame with the 2 lines of `testdata/pgs/04.png` in one corner takes 22 ms and 17 MB of allocations, against 9 ms for the cropped image. Crop the image to the text where you can.
+- A glyph that matches nothing is the slow case, because it runs through every match pass. So the subtitle fonts database is faster on the fonts it knows.
+- The third row uses the Latin glyphs with the ink and background segments swapped, so almost no glyph matches.
+- Crop the image to the text where you can. The splitter and the matcher work on every pixel of the image.
 - Machine: Intel Core i5-8400T at 1.7 GHz, `GOMAXPROCS=2`, Go 1.27.4, linux/amd64.
-- Command: `go test -run '^$' -bench Recognize -benchmem -benchtime 5x .`
+- Command: `go test -run '^$' -bench . -benchmem -benchtime 5x .`. `make bench BENCHTIME=5x` runs the same command.
 
 ## Limits
 
@@ -155,13 +156,15 @@ The functions wrap these sentinel errors. Test them with `errors.Is`.
 | `ErrInvalidOption` | An option value outside its range, a missing database in `NewRecognizer`, a trainer line count outside 1 to 255 |
 | `ErrInvalidGlyph` | A glyph that fails `Glyph.Validate`, in `NewDatabase`, `Database.Add` and `Trainer.Train` |
 | `ErrInvalidSample` | A sample with a wrong pixel count or part count, in `Trainer.Train` and `MergeSamples` |
-| `ErrInvalidDatabase` | Bytes that are not a valid `.nocr` file, in `ReadDatabase` and `LoadDatabase` |
+| `ErrInvalidDatabase` | Data that is not gzip-compressed, in `ReadDatabase` and `LoadDatabase` |
+
+A damaged record in the gzip stream ends the read without an error, as in Subtitle Edit. The database then holds the glyphs before that record.
 
 `LoadDatabase` of a path that does not exist returns the file error, so `errors.Is(err, fs.ErrNotExist)` is true.
 
 ## Differences from php-glyph-ocr
 
-The port gives the same reads as php-glyph-ocr 0.3.0 except where the PHP code is wrong, or where Go has other types.
+The port gives the same reads as php-glyph-ocr 0.3.0, except where the PHP code is wrong or where Go has other types or another API.
 
 | Behaviour | PHP | Go | PHP issue |
 |:--- |:--- |:--- |:--- |
@@ -172,7 +175,7 @@ The port gives the same reads as php-glyph-ocr 0.3.0 except where the PHP code i
 | Right-to-left lines | No derived spaces | Derives spaces as for left-to-right lines | [php-glyph-ocr#14](https://github.com/yama6a/php-glyph-ocr/issues/14) |
 | Right-to-left lines and multi-part glyphs such as `"` and `%` | Never matches them | Matches them | [php-glyph-ocr#15](https://github.com/yama6a/php-glyph-ocr/issues/15) |
 | Images and PNG decoding | Own image classes and PNG decoder | `image.Image` and `image/png` | none, Go types |
-| `Sample` X and Y | Count from the first ink row | Image coordinates. No read depends on them | none, Go types |
+| `Sample` X and Y | Count from the first ink row | Image coordinates. No read depends on them | none, Go API |
 | `LoadDatabase` of a missing file | Throws a database exception | Returns the file error | none, Go types |
 
 ## Attribution
@@ -194,7 +197,7 @@ This module is a port of [php-glyph-ocr](https://github.com/yama6a/php-glyph-ocr
 
 `spaces.go`, `linecontext.go`, `recognizer.go` and `image.go` are php-glyph-ocr code.
 
-`resources/SubtitleFonts.nocr` is trained on renderings of these fonts. It holds line segments measured on rendered glyphs, and no font outlines. php-glyph-ocr builds it with `tests/fixtures/generator/train.php`, and this module copies it unchanged. The test images in `testdata` use these fonts and Open Sans. `testdata/SOURCES.md` lists them.
+`resources/SubtitleFonts.nocr` is trained on renderings of these fonts. It holds line segments measured on rendered glyphs, and no font outlines. php-glyph-ocr builds it with `tests/fixtures/generator/train.php`. This module copies it unchanged. The test images in `testdata` use these fonts and Open Sans. `testdata/SOURCES.md` lists them.
 
 | Font | Licence |
 |:--- |:--- |
@@ -203,7 +206,7 @@ This module is a port of [php-glyph-ocr](https://github.com/yama6a/php-glyph-ocr
 | [Noto Sans 2.015](https://github.com/notofonts/latin-greek-cyrillic/releases/tag/NotoSans-v2.015) | SIL Open Font Licence 1.1 |
 | [Open Sans](https://github.com/googlefonts/opensans/tree/bd7e37632246368c60fdcbd374dbf9bad11969b6/fonts/ttf), test images only | SIL Open Font Licence 1.1 |
 
-The Mersenne Twister of `mt19937.go` follows the published algorithm of Makoto Matsumoto and Takuji Nishimura, and the range rule follows the behaviour of PHP `Random\Randomizer::getInt`. The file copies no code of either.
+The Mersenne Twister of `mt19937.go` follows the published algorithm of Makoto Matsumoto and Takuji Nishimura. The range rule follows the behaviour of PHP `Random\Randomizer::getInt`. The file copies no code of either.
 
 ## Development
 
