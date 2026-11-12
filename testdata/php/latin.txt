@@ -1,0 +1,51 @@
+bluray/01.png | I don't know wh*t you me*n.
+bluray/02.png | Where were you last night? / * waited for hours.
+bluray/03.png | We have *o leave, now!
+bluray/04.png | I*'s 10:30 already.
+bluray/05.png | Thank you, Mr. Jensen. / Good night.
+bluray/06.png | Nobody s* anything, right?
+bluray/07.png | The traiD leaves a* 7:45. / Do Do* be la*e.
+bluray/08.png | Wha* happened *o *he money?
+capital-i/01.png | *'ll tell Lily *'m ill. / *s it illegal?
+capital-i/02.png | If I fal** I'll call you. / Lisa will help.
+capital-i/03.png | IT IS ALL I HAVE.
+capital-i/04.png | Il es* là. Ils l'aiment.
+capital-i/05.png | I *ope I*la likes it. / I lied'
+capital-i/06.png | Lily, I *old you.
+capital-i/07.png | I thiDk I lost Lucy's ball*
+capital-i/08.png | I* IaD iD Li*boD?
+capital-i/09.png | I really liked it*
+capital-i/10.png | Alice is all I need.
+capital-i/11.png | I wil! look lat8r.
+capital-i/12.png | I*ll **ll *ill'
+capital-i/13.png | I l*ke i** Lola does no**
+capital-i/14.png | Is L*lle iD Belgium?
+dvd/01.png | Come o*, *u*ry up!
+dvd/02.png | w*y did you do t**t? / You **omi*ed *e'
+dvd/03.png | Tu** l** ** *** **idg*'
+dvd/04.png | M*ybe *omo**o*, m*ybe *eve*. / **O kDO***
+dvd/05.png | DoD'* mo*e.
+dvd/06.png | Twe** ye*** *g*, i* *9**.
+italic/01.png | She is not coming back.
+italic/02.png | Remem*er what I toldyou. / AIways.
+italic/03.png | Lon* agQ* in a small town.*.
+italic/04.png | Is anybody there*
+pgs/01.png | Get iD the c*r. *uickly!
+pgs/02.png | - Are you sure? / - Yes, I *m.
+pgs/03.png | I'll be back in 5 minu*es.
+pgs/04.png | Hello* my friend. / How are you?
+pgs/05.png | Let me go!
+pgs/06.png | Which way *s *he s*a*ion?
+plain/01.png | Good morDiDg* eVerybody.
+plain/02.png | OPeD *he door. / Slowly.
+plain/03.png | Wait tor me here.
+plain/04.png | si* *pple* aDd DiDe pe**S.
+small/01.png | s** *** '****.
+small/02.png | C*ll **e **lice* / Now*
+small/03.png | I* **i* y*u* **g?
+unseen/01.png | I don't bel*eve it* / Let's go home*
+unseen/02.png | Where *s the hosp*tal?
+unseen/03.png | call me w*eD you la*d' / I will wai**
+unseen/04.png | It was a lon* ni*ht*
+unseen/05.png | Br*Dg the keys* plea*e.
+unseen/06.png | I* everyo*e *eady*
