@@ -116,26 +116,20 @@ func (r *Recognizer) Split(img image.Image) [][]*Sample {
 	_, cropped, items := r.splitImage(img)
 	origin := img.Bounds().Min
 
-	var lines [][]*Sample
-	var line []*Sample
+	lines := [][]*Sample{nil}
 	for _, item := range items {
+		last := len(lines) - 1
 		switch {
 		case item.special == lineBreak:
-			if len(line) > 0 {
-				lines = append(lines, line)
-			}
-			line = make([]*Sample, 0, 16)
+			lines = append(lines, nil)
 		case item.bmp == nil:
-			line = append(line, nil)
+			lines[last] = append(lines[last], nil)
 		default:
-			line = append(line, itemSample(item, origin, cropped))
+			lines[last] = append(lines[last], itemSample(item, origin, cropped))
 		}
 	}
-	if len(line) > 0 {
-		lines = append(lines, line)
-	}
 
-	return lines
+	return slices.DeleteFunc(lines, func(line []*Sample) bool { return len(line) == 0 })
 }
 
 func (r *Recognizer) splitImage(img image.Image) (bmp *bitmap, cropped int, items []splitItem) {

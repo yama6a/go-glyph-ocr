@@ -244,13 +244,14 @@ func TestRecognizeRightToLeftMultiPart(t *testing.T) {
 
 	img := image.NewNRGBA(image.Rect(0, 0, 40, 30))
 	white := color.NRGBA{R: 255, G: 255, B: 255, A: 255}
-	for _, x0 := range []int{10, 18, 28} {
-		w := 3
-		if x0 == 28 {
-			w = 5
-		}
-		for y := 5; y < 13+12*(x0/28); y++ {
-			for x := x0; x < x0+w; x++ {
+	bars := []image.Rectangle{
+		image.Rect(10, 5, 13, 13), // left mark of the quote, 3x8
+		image.Rect(18, 7, 21, 13), // right mark, 3x6 and 2 rows lower
+		image.Rect(28, 5, 33, 25), // the bar after the quote, 5x20
+	}
+	for _, r := range bars {
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
 				img.SetNRGBA(x, y, white)
 			}
 		}
@@ -279,6 +280,7 @@ func TestRecognizeRightToLeftMultiPart(t *testing.T) {
 		assert.Equal(t, 2, got.Sample.Parts)
 		assert.Equal(t, pair.Width, got.Sample.Width)
 		assert.Equal(t, pair.X, got.Sample.X)
+		assert.Equal(t, pair.MarginTop, got.Sample.MarginTop)
 	}
 }
 
@@ -304,7 +306,7 @@ func FuzzRecognize(f *testing.F) {
 }
 
 // mismatchedDatabase holds the glyphs of Latin() with the ink and background segments swapped.
-// They pass the size and aspect checks of every loose pass and never match, so the slow path runs.
+// They pass the size and aspect checks of every loose pass and rarely match, so the slow path runs.
 func mismatchedDatabase(tb testing.TB) *Database {
 	tb.Helper()
 	latin := Latin().Glyphs()
