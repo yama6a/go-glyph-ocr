@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"image"
-	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
@@ -43,16 +42,6 @@ func databaseNamed(name string) *Database {
 	return SubtitleFonts()
 }
 
-func readPNG(tb testing.TB, path string) image.Image {
-	tb.Helper()
-	data, err := os.ReadFile(path)
-	require.NoError(tb, err)
-	img, err := png.Decode(bytes.NewReader(data))
-	require.NoError(tb, err)
-
-	return img
-}
-
 func setFiles(tb testing.TB, set string) []string {
 	tb.Helper()
 	files, err := filepath.Glob(filepath.Join("testdata", set, "*.png"))
@@ -64,12 +53,11 @@ func setFiles(tb testing.TB, set string) []string {
 
 // setRead is the result of one recognizer on all images of one set.
 type setRead struct {
-	lines    []string // "<set>/<file> | <text with " / " for line breaks>"
-	report   []string
-	chars    int
-	errors   int
-	perfect  int
-	imageCnt int
+	lines   []string // "<set>/<file> | <text with " / " for line breaks>"
+	report  []string
+	chars   int
+	errors  int
+	perfect int
 }
 
 func (s setRead) accuracy() float64 {
@@ -85,7 +73,7 @@ func readSet(tb testing.TB, db *Database, set string, opts ...Option) setRead {
 		want, err := os.ReadFile(strings.TrimSuffix(file, ".png") + ".txt")
 		require.NoError(tb, err)
 		expected := strings.TrimRight(string(want), "\n")
-		actual := rec.Recognize(readPNG(tb, file)).Text()
+		actual := rec.Recognize(loadFixture(tb, set+"/"+strings.TrimSuffix(filepath.Base(file), ".png"))).Text()
 		wrong := levenshtein([]rune(expected), []rune(actual))
 		line := set + "/" + filepath.Base(file) + " | " + strings.ReplaceAll(actual, "\n", " / ")
 
@@ -93,7 +81,6 @@ func readSet(tb testing.TB, db *Database, set string, opts ...Option) setRead {
 		out.report = append(out.report, fmt.Sprintf("%s: %d wrong", line, wrong))
 		out.chars += len([]rune(expected))
 		out.errors += wrong
-		out.imageCnt++
 		if wrong == 0 {
 			out.perfect++
 		}
@@ -135,15 +122,8 @@ func readLines(tb testing.TB, path string) []string {
 	return strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
 }
 
-func TestEveryImageHasItsTextFile(t *testing.T) {
-	t.Parallel()
-
-	for _, name := range goldenImages(t) {
-		assert.FileExists(t, filepath.Join("testdata", name+".txt"))
-	}
-}
-
 func TestGolden(t *testing.T) {
+	skipUnderRace(t)
 	t.Parallel()
 
 	for _, database := range []string{"latin", "subtitle-fonts"} {
@@ -152,26 +132,18 @@ func TestGolden(t *testing.T) {
 
 			db := databaseNamed(database)
 			var all []string
-			var golden []string
-			if !*update {
-				golden = readLines(t, goldenPath("golden", database))
-			}
 			for set, minimum := range minAccuracy[database] {
 				read := readSet(t, db, set)
 				all = append(all, read.lines...)
 				assert.GreaterOrEqual(t, read.accuracy(), minimum, "%s %s\n%s", database, set, strings.Join(read.report, "\n"))
-				for _, line := range read.lines {
-					if !*update {
-						assert.Contains(t, golden, line, "%s: the read differs from testdata/golden/%s.txt", database, database)
-					}
-				}
 			}
 			sort.Strings(all)
 			if *update {
 				require.NoError(t, os.WriteFile(goldenPath("golden", database), []byte(strings.Join(all, "\n")+"\n"), 0o600))
-			} else {
-				assert.Len(t, all, len(golden))
+
+				return
 			}
+			assert.Equal(t, readLines(t, goldenPath("golden", database)), all, "the reads differ from testdata/golden/%s.txt", database)
 		})
 	}
 }
@@ -203,6 +175,7 @@ func TestPHPReads(t *testing.T) {
 
 // TestSubtitleEditParity runs the parts the way NOcrOcrEngine.Recognize of Subtitle Edit runs them.
 func TestSubtitleEditParity(t *testing.T) {
+	skipUnderRace(t)
 	t.Parallel()
 
 	expected := readLines(t, filepath.Join("testdata", "subtitle-edit", "expected.txt"))
@@ -210,7 +183,7 @@ func TestSubtitleEditParity(t *testing.T) {
 	names := goldenImages(t)
 	actual := make([]string, 0, len(names))
 	for _, name := range names {
-		actual = append(actual, name+".png | "+subtitleEditRead(db, readPNG(t, filepath.Join("testdata", name+".png"))))
+		actual = append(actual, name+".png | "+subtitleEditRead(db, loadFixture(t, name)))
 	}
 
 	assert.Equal(t, expected, actual)
@@ -250,6 +223,7 @@ func subtitleEditRead(db *Database, img image.Image) string {
 }
 
 func TestTrainingParity(t *testing.T) {
+	skipUnderRace(t)
 	t.Parallel()
 
 	dir := filepath.Join("testdata", "training", "LiberationSans-Regular-28")
@@ -266,7 +240,7 @@ func TestTrainingParity(t *testing.T) {
 	require.NoError(t, err)
 	var singles, expanded []*Glyph
 	for i, letter := range letters {
-		sample := trainingSample(t, readPNG(t, filepath.Join(dir, fmt.Sprintf("%03d.png", i+1))))
+		sample := trainingSample(t, loadFixture(t, fmt.Sprintf("training/LiberationSans-Regular-28/%03d", i+1)))
 		g, err := trainer.Train(sample, string(letter), false)
 		require.NoError(t, err)
 		if g.ExpandCount > 0 {
@@ -330,7 +304,7 @@ func TestAccuracyTable(t *testing.T) {
 
 	log := func(label string, db *Database, set string, opts ...Option) {
 		read := readSet(t, db, set, opts...)
-		t.Logf("%-28s %-10s accuracy %.1f%%, %d of %d lines without error", label, set, read.accuracy()*100, read.perfect, read.imageCnt)
+		t.Logf("%-28s %-10s accuracy %.1f%%, %d of %d lines without error", label, set, read.accuracy()*100, read.perfect, len(read.lines))
 	}
 	for _, database := range []string{"latin", "subtitle-fonts"} {
 		sets := make([]string, 0, len(minAccuracy[database]))
@@ -346,4 +320,12 @@ func TestAccuracyTable(t *testing.T) {
 		log("latin, no line context", Latin(), set, NoLineContext())
 	}
 	log("latin, italic slant 0.2", Latin(), "italic", ItalicSlant(0.2))
+}
+
+// skipUnderRace skips a deterministic single-goroutine test. The race detector adds no check there and slows CI.
+func skipUnderRace(t *testing.T) {
+	t.Helper()
+	if raceEnabled {
+		t.Skip("deterministic single-goroutine test, the amd64 job runs it")
+	}
 }

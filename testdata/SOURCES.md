@@ -1,7 +1,7 @@
 # Sources
 
 Every image here was drawn for php-glyph-ocr by its fixture generator. No image holds text from a film.
-The files are copied unchanged from [php-glyph-ocr](https://github.com/yama6a/php-glyph-ocr) at commit `10e3eb3`, under the MIT licence of that repository.
+The golden images and their texts are copied unchanged from [php-glyph-ocr](https://github.com/yama6a/php-glyph-ocr) at commit `10e3eb3`, under the MIT licence of that repository.
 No font file is copied. The font licences govern only the font files.
 
 ## Golden images

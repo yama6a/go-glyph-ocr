@@ -1,7 +1,7 @@
 <?php
 
 // Writes the PHP reference files for go-glyph-ocr. Run it with the PHP of php-glyph-ocr 0.3.0
-// (commit 10e3eb3) after `composer dump-autoload --dev`, from the root of that checkout:
+// (commit 10e3eb3) after `composer dump-autoload --dev` in a checkout of it. Both paths are arguments:
 //   php export.php <php-glyph-ocr root> <go-glyph-ocr testdata dir>
 
 use GlyphOcr\GlyphDatabase;
@@ -11,6 +11,8 @@ use GlyphOcr\Tests\Fixtures\Generator\Fixtures;
 use GlyphOcr\Tests\Fixtures\Generator\SubtitleFonts;
 
 [, $root, $out] = $argv;
+set_error_handler(static fn(int $level, string $message) => throw new ErrorException($message));
+is_dir("$out/php") || mkdir("$out/php", 0777, true);
 require "$root/vendor/autoload.php";
 
 foreach (['latin' => 'latin', 'subtitle-fonts' => 'subtitleFonts'] as $file => $factory) {
@@ -27,7 +29,7 @@ foreach (['latin' => 'latin', 'subtitle-fonts' => 'subtitleFonts'] as $file => $
 }
 
 $dir = "$out/training/LiberationSans-Regular-28";
-mkdir($dir, 0777, true);
+is_dir($dir) || mkdir($dir, 0777, true);
 file_put_contents("$dir/chars.txt", SubtitleFonts::CHARS . "\n");
 foreach (mb_str_split(SubtitleFonts::CHARS) as $i => $char) {
     $spec = Fixtures::styled('bluray', ["Hd    $char"], 'LiberationSans-Regular.ttf', SubtitleFonts::SIZES[0]);
