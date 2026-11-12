@@ -105,27 +105,24 @@ return db.Save("my-font.nocr")
 
 The golden images in `testdata` are white or yellow subtitles, 20 to 60 pixels, 1 or 2 lines. `testdata/SOURCES.md` describes them. One recognizer reads each set in order.
 
-Character accuracy is 1 minus the edit distance divided by the length of the expected text. The number of lines read without error is in brackets.
+Character accuracy is 1 minus the edit distance divided by the length of the expected text. The number of images read without error is in brackets. `GLYPHOCR_ACCURACY=1 go test -run TestAccuracyTable -v .` prints the numbers.
 
-<!-- PLACEHOLDER: the parity tests of issue #12 fill this table. Until then no cell holds a measured value. -->
-
-| Set | Fonts | `SubtitleFonts()` | `Latin()` | After training |
-|:--- |:--- | ---:| ---:| ---:|
-| Blu-ray, smooth RGBA | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| PGS palette | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| DVD, 4 colours, 24 to 30 px | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| Italic | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| No outline | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| Small, 20 to 24 px | DejaVu Sans, Liberation Sans | TBD | TBD | TBD |
-| Capital I and lower case l | DejaVu Sans, Liberation Sans, Noto Sans, Open Sans | TBD | TBD | TBD |
-| Unseen font | Open Sans | TBD | TBD | TBD |
-| All | | TBD | TBD | TBD |
+| Set | Fonts | `SubtitleFonts()` | `Latin()` |
+|:--- |:--- | ---:| ---:|
+| Blu-ray, smooth RGBA | DejaVu Sans, Liberation Sans | 98.8% (6 of 8) | 93.8% (1 of 8) |
+| PGS palette | DejaVu Sans, Liberation Sans | 100% (6 of 6) | 93.0% (1 of 6) |
+| DVD, 4 colours, 24 to 30 px | DejaVu Sans, Liberation Sans | 95.5% (3 of 6) | 63.2% (0 of 6) |
+| Italic | DejaVu Sans, Liberation Sans | 98.0% (3 of 4) | 92.1% (1 of 4) |
+| No outline | DejaVu Sans, Liberation Sans | 98.9% (3 of 4) | 79.8% (0 of 4) |
+| Small, 20 to 24 px | DejaVu Sans, Liberation Sans | 98.1% (2 of 3) | 50.0% (0 of 3) |
+| Capital I and lower case l | DejaVu Sans, Liberation Sans, Noto Sans, Open Sans | 99.4% (12 of 14) | 90.2% (2 of 14) |
+| Unseen font | Open Sans | 96.7% (3 of 6) | 84.9% (0 of 6) |
+| All | | 98.3% (38 of 51) | 85.0% (5 of 51) |
 
 - The Latin database has no glyphs of these fonts. The numbers show how it does on fonts it has not seen. The subtitle fonts database has no glyphs of Open Sans.
-- "After training" adds to the Latin database one trained glyph per character for each font, size and style: the alphabet, digits and `.,!?'-:`, drawn on a separate image. A new recognizer reads each image.
-- With `NoLineContext()`, the numbers are TBD for both databases, and TBD capital I and lower case l come out as the other letter. With line context, none do.
-- With `ItalicSlant(0.2)`, the italic set reads TBD of the characters.
-- With the same database and `NoLineContext()`, the port reads every golden image exactly as Subtitle Edit does.
+- With `NoLineContext()`, the Latin database reads 80.3% of the characters (1 of 51 images) and the subtitle fonts database reads 91.2% (7 of 51).
+- With `ItalicSlant(0.2)`, the Latin database reads 96.0% of the characters of the italic set (2 of 4 images).
+- With the same database and `NoLineContext()`, the port reads every golden image exactly as Subtitle Edit does. `TestSubtitleEditParity` checks this.
 
 ## Speed
 
@@ -133,9 +130,9 @@ Benchmark `BenchmarkRecognize` reads the 51 golden images, one after another, wi
 
 | Database | Time per image | Time per pass over 51 images |
 |:--- | ---:| ---:|
-| `SubtitleFonts()` | 8 ms | 0.41 s |
-| `Latin()` | 21 ms | 1.06 s |
-| Glyphs that match nothing | 38 ms | 1.92 s |
+| `SubtitleFonts()` | 7 ms | 0.36 s |
+| `Latin()` | 19 ms | 0.95 s |
+| Glyphs that match nothing | 34 ms | 1.74 s |
 
 - A glyph that matches nothing is the slow case, because it runs through every match pass. So the subtitle fonts database is faster on the fonts it knows. The third row reads with a database that has none of the glyphs.
 - A 1920x1080 frame with the 2 lines of `testdata/pgs/04.png` in one corner takes 22 ms and 17 MB of allocations, against 9 ms for the cropped image. Crop the image to the text where you can.
