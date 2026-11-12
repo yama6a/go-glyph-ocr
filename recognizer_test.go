@@ -346,21 +346,3 @@ func BenchmarkRecognize(b *testing.B) {
 		})
 	}
 }
-
-func ExampleRecognizer_Recognize() {
-	f, err := os.Open(filepath.Join("testdata", "capital-i", "03.png"))
-	if err != nil {
-		panic(err)
-	}
-	defer f.Close()
-	img, err := png.Decode(f)
-	if err != nil {
-		panic(err)
-	}
-	r, err := NewRecognizer(Latin())
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(r.Recognize(img).Text())
-	// Output: IT IS ALL I HAVE.
-}

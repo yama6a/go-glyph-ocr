@@ -304,20 +304,38 @@ func TestAccuracyTable(t *testing.T) {
 
 	log := func(label string, db *Database, set string, opts ...Option) {
 		read := readSet(t, db, set, opts...)
-		t.Logf("%-28s %-10s accuracy %.1f%%, %d of %d lines without error", label, set, read.accuracy()*100, read.perfect, len(read.lines))
+		t.Logf("%-28s %-10s accuracy %.1f%%, %d of %d images without error", label, set, read.accuracy()*100, read.perfect, len(read.lines))
 	}
-	for _, database := range []string{"latin", "subtitle-fonts"} {
-		sets := make([]string, 0, len(minAccuracy[database]))
-		for set := range minAccuracy[database] {
-			sets = append(sets, set)
-		}
-		sort.Strings(sets)
-		for _, set := range sets {
-			log(database, databaseNamed(database), set)
-		}
-	}
+	sets := make([]string, 0, len(minAccuracy["latin"]))
 	for set := range minAccuracy["latin"] {
-		log("latin, no line context", Latin(), set, NoLineContext())
+		sets = append(sets, set)
+	}
+	sort.Strings(sets)
+	logAll := func(label string, db func() *Database, opts ...Option) {
+		var total setRead
+		for _, set := range sets {
+			read := readSet(t, db(), set, opts...)
+			total.chars += read.chars
+			total.errors += read.errors
+			total.perfect += read.perfect
+			total.lines = append(total.lines, read.lines...)
+		}
+		t.Logf("%-28s %-10s accuracy %.1f%%, %d of %d images without error", label, "all", total.accuracy()*100, total.perfect, len(total.lines))
+	}
+	for _, c := range []struct {
+		label string
+		db    func() *Database
+		opts  []Option
+	}{
+		{"latin", Latin, nil},
+		{"subtitle-fonts", SubtitleFonts, nil},
+		{"latin, no line context", Latin, []Option{NoLineContext()}},
+		{"subtitle-fonts, no line context", SubtitleFonts, []Option{NoLineContext()}},
+	} {
+		for _, set := range sets {
+			log(c.label, c.db(), set, c.opts...)
+		}
+		logAll(c.label, c.db, c.opts...)
 	}
 	log("latin, italic slant 0.2", Latin(), "italic", ItalicSlant(0.2))
 }
