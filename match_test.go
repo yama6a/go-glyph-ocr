@@ -60,7 +60,7 @@ func TestMatcherExactAndLoose(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			m := newMatcher(newTestDatabase(t, letterA("A")), 0, 0)
+			m := newMatcher(newTestDatabase(t, letterA("A")), 0, 0, false)
 			res, ok := matchSingle(m, tt.bmp)
 			assert.Equal(t, tt.wantText != "", ok)
 			if ok {
@@ -97,7 +97,7 @@ func TestMatcherOrderAndBudget(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			m := newMatcher(newTestDatabase(t, tt.glyphs...), tt.max, 0)
+			m := newMatcher(newTestDatabase(t, tt.glyphs...), tt.max, 0, false)
 			res, ok := matchSingle(m, tt.bmp)
 			require.True(t, ok)
 			assert.Equal(t, tt.wantText, res.glyph.Text)
@@ -108,7 +108,7 @@ func TestMatcherOrderAndBudget(t *testing.T) {
 func TestMatcherDropsCachesOnAdd(t *testing.T) {
 	t.Parallel()
 	db := newTestDatabase(t, letterA("old"))
-	m := newMatcher(db, 0, 0)
+	m := newMatcher(db, 0, 0, false)
 	b := drawGlyph(letterA(""), 10, 12)
 
 	res, ok := matchSingle(m, b)
@@ -163,7 +163,7 @@ func TestMatcherMultiPart(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			parent, items := quoteItems(tt.secondX)
-			m := newMatcher(newTestDatabase(t, tt.glyph), 0, 0)
+			m := newMatcher(newTestDatabase(t, tt.glyph), 0, 0, false)
 			res, ok := m.match(parent, items, 0)
 			require.Equal(t, tt.wantResult, ok)
 			if ok {
@@ -177,7 +177,7 @@ func TestMatcherMultiPart(t *testing.T) {
 func TestMatcherMultiPartAfterPartAlone(t *testing.T) {
 	t.Parallel()
 	parent, items := quoteItems(7)
-	m := newMatcher(newTestDatabase(t, quoteGlyph(9, 6, 5)), 0, 0)
+	m := newMatcher(newTestDatabase(t, quoteGlyph(9, 6, 5)), 0, 0, false)
 
 	_, ok := m.match(parent, items[:1], 0)
 	require.False(t, ok, "a lone part has no group to match")
@@ -211,7 +211,7 @@ func TestMatcherItalic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			m := newMatcher(newTestDatabase(t, bar), 0, tt.slant)
+			m := newMatcher(newTestDatabase(t, bar), 0, tt.slant, false)
 			res, ok := matchSingle(m, slanted)
 			require.Equal(t, tt.wantHit, ok)
 			if ok {
